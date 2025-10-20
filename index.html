@@ -772,6 +772,7 @@
             let timeoutId = null;
             let imageLoadTimeoutId = null;
             let resolved = false;
+            let originalLog, originalWarn, originalError;
 
             const cleanup = () => {
                 console.log('Cleaning up resources for:', filename);
@@ -788,9 +789,22 @@
                 img = null;
             };
 
+            const restoreConsole = () => {
+                if (originalLog) {
+                    try {
+                        console.log = originalLog;
+                        console.warn = originalWarn;
+                        console.error = originalError;
+                    } catch (e) {
+                        // Console restoration failed, continue anyway
+                    }
+                }
+            };
+
             const safeResolve = (data) => {
                 if (resolved) return;
                 resolved = true;
+                restoreConsole();
                 console.log('Safe resolve for', filename, 'with data:', data ? 'GPS data extracted' : 'null');
                 cleanup();
                 resolve(data);
@@ -821,9 +835,9 @@
                     clearTimeout(imageLoadTimeoutId);
                     console.log('Image loaded for', filename, ', preparing EXIF extraction');
                     try {
-                        const originalLog = console.log;
-                        const originalWarn = console.warn;
-                        const originalError = console.error;
+                        originalLog = console.log;
+                        originalWarn = console.warn;
+                        originalError = console.error;
                         
                         const exifLogs = [];
                         
@@ -843,9 +857,7 @@
                         };
 
                         timeoutId = setTimeout(() => {
-                            console.log = originalLog;
-                            console.warn = originalWarn;
-                            console.error = originalError;
+                            restoreConsole();
                             console.warn('EXIF extraction timeout for', filename, '- took longer than', CONFIG.EXIF_TIMEOUT, 'ms');
                             safeResolve(null);
                         }, CONFIG.EXIF_TIMEOUT);
@@ -854,12 +866,9 @@
                             console.log('Calling EXIF.getData for', filename);
                             
                             EXIF.getData(img, function() {
-                                console.log = originalLog;
-                                console.warn = originalWarn;
-                                console.error = originalError;
-                                
                                 if (resolved) return;
                                 clearTimeout(timeoutId);
+                                restoreConsole();
                                 
                                 console.log('EXIF.getData callback executed for', filename);
                                 
@@ -922,21 +931,18 @@
                                         camera: camera,
                                     });
                                 } catch (tagError) {
-                                    console.log = originalLog;
-                                    console.warn = originalWarn;
-                                    console.error = originalError;
+                                    restoreConsole();
                                     console.error('Error extracting EXIF tags for', filename, ':', tagError.message);
                                     return safeResolve(null);
                                 }
                             });
                         } catch (exifCallError) {
-                            console.log = originalLog;
-                            console.warn = originalWarn;
-                            console.error = originalError;
+                            restoreConsole();
                             console.error('EXIF.getData exception for', filename, ':', exifCallError.message);
                             return safeResolve(null);
                         }
                     } catch (outerExifError) {
+                        restoreConsole();
                         console.error('Outer EXIF processing error for', filename, ':', outerExifError.message);
                         return safeResolve(null);
                     }
@@ -959,6 +965,7 @@
                 console.log('Setting image src for', filename, ':', url);
                 img.src = url;
             } catch (error) {
+                restoreConsole();
                 console.error('GPS extraction try-catch error for', filename, ':', error.message);
                 safeResolve(null);
             }
