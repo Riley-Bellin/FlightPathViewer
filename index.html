@@ -1167,6 +1167,32 @@
         }
     }
 
+    function hsvToRgb(h, s, v) {
+        console.log('hsvToRgb called with h:', h, 's:', s, 'v:', v);
+        let r, g, b;
+        const i = Math.floor(h * 6);
+        const f = h * 6 - i;
+        const p = v * (1 - s);
+        const q = v * (1 - f * s);
+        const t = v * (1 - (1 - f) * s);
+        
+        switch (i % 6) {
+            case 0: r = v; g = t; b = p; break;
+            case 1: r = q; g = v; b = p; break;
+            case 2: r = p; g = v; b = t; break;
+            case 3: r = p; g = q; b = v; break;
+            case 4: r = t; g = p; b = v; break;
+            case 5: r = v; g = p; b = q; break;
+        }
+        
+        const hexR = Math.round(r * 255).toString(16).padStart(2, '0');
+        const hexG = Math.round(g * 255).toString(16).padStart(2, '0');
+        const hexB = Math.round(b * 255).toString(16).padStart(2, '0');
+        const hex = '#' + hexR + hexG + hexB;
+        console.log('hsvToRgb result:', hex);
+        return hex;
+    }
+
     function renderPlot(results) {
         console.log('renderPlot called with', results.inliers.length, 'inliers and', results.outliers.length, 'outliers');
         if (results.inliers.length === 0 && results.outliers.length === 0) {
@@ -1262,52 +1288,109 @@
                 });
             }
 
-            if (results.inliers.length > 0) {
-                console.log('Creating inlier trace');
-                const inlierLons = results.inliers.map(p => p.longitude);
-                const inlierLats = results.inliers.map(p => p.latitude);
-                const inlierAlts = results.inliers.map(p => p.altitude);
+            const folderKeys = Object.keys(results.folderMap);
+            console.log('Processing', folderKeys.length, 'folders');
+            const numFolders = folderKeys.length;
 
-                const hover = results.inliers.map(p => 
-                    `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m`
-                );
+            folderKeys.forEach((folderName, folderIndex) => {
+                const folderNameLower = folderName.toLowerCase();
+                
+                if (folderNameLower.includes('civil') || folderNameLower.includes('road')) {
+                    console.log('Skipping folder:', folderName);
+                    return;
+                }
 
-                traces.push({
-                    x: inlierLons,
-                    y: inlierLats,
-                    z: inlierAlts,
-                    mode: 'lines+markers',
-                    type: 'scatter3d',
-                    line: { color: '#32CD32', width: 4 },
-                    marker: { size: 5, color: '#32CD32' },
-                    text: hover,
-                    hovertemplate: '%{text}<extra></extra>',
-                    name: 'Flight Path',
+                console.log('Processing folder:', folderName, '(' + (folderIndex + 1) + '/' + numFolders + ')');
+
+                const hue = folderIndex / numFolders;
+                const folderColor = hsvToRgb(hue, 1, 1);
+                console.log('Assigned color to folder', folderName, ':', folderColor);
+
+                const folderPoints = results.folderMap[folderName];
+                console.log('Folder', folderName, 'has', folderPoints.length, 'points');
+
+                if (!Array.isArray(folderPoints) || folderPoints.length === 0) {
+                    console.log('Skipping folder', folderName, '- no valid points');
+                    return;
+                }
+
+                const folderLats = folderPoints.map(p => p.latitude);
+                const folderLons = folderPoints.map(p => p.longitude);
+                const folderAlts = folderPoints.map(p => p.altitude);
+
+                const folderOutliers = results.outliers.filter(p => {
+                    const pointFolder = p.folder || folderName;
+                    return pointFolder === folderName;
                 });
-            }
 
-            if (results.outliers.length > 0) {
-                console.log('Creating outlier trace');
-                const outlierLons = results.outliers.map(p => p.longitude);
-                const outlierLats = results.outliers.map(p => p.latitude);
-                const outlierAlts = results.outliers.map(p => p.altitude);
-
-                const hover = results.outliers.map(p => 
-                    `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m<br>(OUTLIER)`
-                );
-
-                traces.push({
-                    x: outlierLons,
-                    y: outlierLats,
-                    z: outlierAlts,
-                    mode: 'markers',
-                    type: 'scatter3d',
-                    marker: { size: 8, color: '#ff4136', symbol: 'diamond' },
-                    text: hover,
-                    hovertemplate: '%{text}<extra></extra>',
-                    name: 'Outliers',
+                const folderInliers = folderPoints.filter(p => {
+                    const isOutlier = results.outliers.some(op => 
+                        op.latitude === p.latitude && 
+                        op.longitude === p.longitude && 
+                        op.filename === p.filename
+                    );
+                    return !isOutlier;
                 });
-            }
+
+                console.log('Folder', folderName, '- inliers:', folderInliers.length, 'outliers:', folderOutliers.length);
+
+                if (folderInliers.length > 0) {
+                    console.log('Creating inlier trace for folder:', folderName);
+                    const inlierLons = folderInliers.map(p => p.longitude);
+                    const inlierLats = folderInliers.map(p => p.latitude);
+                    const inlierAlts = folderInliers.map(p => p.altitude);
+
+                    const hover = folderInliers.map(p => 
+                        `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m`
+                    );
+
+                    const customdata = folderInliers.map(p => [p.filename]);
+
+                    traces.push({
+                        x: inlierLons,
+                        y: inlierLats,
+                        z: inlierAlts,
+                        mode: 'lines+markers',
+                        type: 'scatter3d',
+                        line: { color: folderColor, width: 4 },
+                        marker: { size: 5, color: folderColor },
+                        text: hover,
+                        customdata: customdata,
+                        hovertemplate: '%{text}<extra></extra>',
+                        name: folderName,
+                        legendgroup: folderName,
+                        showlegend: true,
+                    });
+                }
+
+                if (folderOutliers.length > 0) {
+                    console.log('Creating outlier trace for folder:', folderName);
+                    const outlierLons = folderOutliers.map(p => p.longitude);
+                    const outlierLats = folderOutliers.map(p => p.latitude);
+                    const outlierAlts = folderOutliers.map(p => p.altitude);
+
+                    const hover = folderOutliers.map(p => 
+                        `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m<br>(OUTLIER)`
+                    );
+
+                    const customdata = folderOutliers.map(p => [p.filename]);
+
+                    traces.push({
+                        x: outlierLons,
+                        y: outlierLats,
+                        z: outlierAlts,
+                        mode: 'markers',
+                        type: 'scatter3d',
+                        marker: { size: 8, color: '#ff4136', symbol: 'diamond' },
+                        text: hover,
+                        customdata: customdata,
+                        hovertemplate: '%{text}<extra></extra>',
+                        name: folderName + ' (Outliers)',
+                        legendgroup: folderName,
+                        showlegend: false,
+                    });
+                }
+            });
 
             console.log('Calling Plotly.newPlot with', traces.length, 'traces');
             Plotly.newPlot(DOM.plotDiv, traces, {
