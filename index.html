@@ -735,12 +735,14 @@
             }
         }
 
+
+    
         function extractGPS(buffer, filename) {
             console.log('extractGPS called for file:', filename, 'buffer size:', buffer ? buffer.byteLength : 'null');
             return new Promise((resolve) => {
                 let url = null;
                 let img = null;
-
+        
                 const cleanup = () => {
                     console.log('Cleaning up resources for:', filename);
                     if (url) {
@@ -752,19 +754,19 @@
                         }
                     }
                 };
-
+        
                 const safeResolve = (data) => {
                     console.log('Safe resolve for', filename, 'with data:', data ? 'GPS data extracted' : 'null');
                     cleanup();
                     resolve(data);
                 };
-
+        
                 try {
                     if (!buffer || buffer.byteLength === 0) {
                         console.log('Skipping', filename, ': empty buffer');
                         return safeResolve(null);
                     }
-
+        
                     console.log('Creating blob for', filename);
                     const blob = new Blob([buffer], { type: 'image/jpeg' });
                     url = URL.createObjectURL(blob);
@@ -775,80 +777,121 @@
                     console.log('Image object created for', filename);
                     
                     img.onload = function() {
-                        console.log('Image loaded for', filename, ', calling EXIF.getData');
+                        console.log('Image loaded for', filename, ', preparing EXIF extraction');
                         try {
-                            EXIF.getData(img, function() {
-                                console.log('EXIF.getData callback executed for', filename);
-                                try {
-                                    const lat = EXIF.getTag(this, 'GPSLatitude');
-                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
-                                    const lon = EXIF.getTag(this, 'GPSLongitude');
-                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
-                                    const alt = EXIF.getTag(this, 'GPSAltitude');
-
-                                    console.log('EXIF tags retrieved for', filename, '- lat:', lat ? 'present' : 'missing', 'latRef:', latRef, 'lon:', lon ? 'present' : 'missing', 'lonRef:', lonRef);
-
-                                    if (!lat || !latRef || !lon || !lonRef) {
-                                        console.log('Missing required GPS tags for', filename);
-                                        return safeResolve(null);
-                                    }
-
-                                    const latitude = convertDMS(lat);
-                                    const longitude = convertDMS(lon);
-
-                                    console.log('DMS conversion result for', filename, '- latitude:', latitude, 'longitude:', longitude);
-
-                                    if (latitude === null || longitude === null) {
-                                        console.log('DMS conversion failed for', filename);
-                                        return safeResolve(null);
-                                    }
-
-                                    const finalLat = latRef === 'S' ? -latitude : latitude;
-                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
+                            const originalLog = console.log;
+                            const originalWarn = console.warn;
+                            const originalError = console.error;
+                            
+                            const exifLogs = [];
+                            
+                            console.log = function(...args) {
+                                const message = args.join(' ');
+                                exifLogs.push(message);
+                            };
+                            
+                            console.warn = function(...args) {
+                                const message = args.join(' ');
+                                exifLogs.push('WARN: ' + message);
+                            };
+                            
+                            console.error = function(...args) {
+                                const message = args.join(' ');
+                                exifLogs.push('ERROR: ' + message);
+                            };
+        
+                            try {
+                                console.log('Calling EXIF.getData for', filename);
+                                
+                                EXIF.getData(img, function() {
+                                    console.log = originalLog;
+                                    console.warn = originalWarn;
+                                    console.error = originalError;
                                     
-                                    console.log('Calculated final coordinates for', filename, '- finalLat:', finalLat, 'finalLon:', finalLon);
-
-                                    let altitude = 0;
-                                    if (alt) {
-                                        altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
-                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
-                                        console.log('Altitude extracted for', filename, ':', altitude);
-                                    } else {
-                                        console.log('No altitude data for', filename);
+                                    console.log('EXIF.getData callback executed for', filename);
+                                    console.log('EXIF library messages:', exifLogs);
+                                    
+                                    try {
+                                        const lat = EXIF.getTag(this, 'GPSLatitude');
+                                        const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                        const lon = EXIF.getTag(this, 'GPSLongitude');
+                                        const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                        const alt = EXIF.getTag(this, 'GPSAltitude');
+        
+                                        console.log('EXIF tags retrieved for', filename, '- lat:', lat ? 'present' : 'missing', 'latRef:', latRef, 'lon:', lon ? 'present' : 'missing', 'lonRef:', lonRef);
+        
+                                        if (!lat || !latRef || !lon || !lonRef) {
+                                            console.log('Missing required GPS tags for', filename);
+                                            return safeResolve(null);
+                                        }
+        
+                                        const latitude = convertDMS(lat);
+                                        const longitude = convertDMS(lon);
+        
+                                        console.log('DMS conversion result for', filename, '- latitude:', latitude, 'longitude:', longitude);
+        
+                                        if (latitude === null || longitude === null) {
+                                            console.log('DMS conversion failed for', filename);
+                                            return safeResolve(null);
+                                        }
+        
+                                        const finalLat = latRef === 'S' ? -latitude : latitude;
+                                        const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                        
+                                        console.log('Calculated final coordinates for', filename, '- finalLat:', finalLat, 'finalLon:', finalLon);
+        
+                                        let altitude = 0;
+                                        if (alt) {
+                                            altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
+                                            altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                            console.log('Altitude extracted for', filename, ':', altitude);
+                                        } else {
+                                            console.log('No altitude data for', filename);
+                                        }
+        
+                                        let camera = null;
+                                        const make = EXIF.getTag(this, 'Make');
+                                        const model = EXIF.getTag(this, 'Model');
+                                        if (make || model) {
+                                            camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                            console.log('Camera info for', filename, ':', camera);
+                                        }
+        
+                                        console.log('SUCCESS: GPS extracted for', filename, '- Lat:', finalLat, 'Lon:', finalLon, 'Alt:', altitude);
+                                        safeResolve({
+                                            latitude: finalLat,
+                                            longitude: finalLon,
+                                            altitude: altitude,
+                                            filename: filename,
+                                            camera: camera,
+                                        });
+                                    } catch (tagError) {
+                                        console.log = originalLog;
+                                        console.warn = originalWarn;
+                                        console.error = originalError;
+                                        console.error('Error extracting EXIF tags for', filename, ':', tagError.message, tagError.stack);
+                                        return safeResolve(null);
                                     }
-
-                                    let camera = null;
-                                    const make = EXIF.getTag(this, 'Make');
-                                    const model = EXIF.getTag(this, 'Model');
-                                    if (make || model) {
-                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
-                                        console.log('Camera info for', filename, ':', camera);
-                                    }
-
-                                    console.log('SUCCESS: GPS extracted for', filename, '- Lat:', finalLat, 'Lon:', finalLon, 'Alt:', altitude);
-                                    safeResolve({
-                                        latitude: finalLat,
-                                        longitude: finalLon,
-                                        altitude: altitude,
-                                        filename: filename,
-                                        camera: camera,
-                                    });
-                                } catch (tagError) {
-                                    console.error('Error extracting EXIF tags for', filename, ':', tagError.message, tagError.stack);
-                                    return safeResolve(null);
-                                }
-                            });
-                        } catch (exifError) {
-                            console.error('EXIF.getData error for', filename, ':', exifError.message, exifError.stack);
+                                });
+                            } catch (exifCallError) {
+                                console.log = originalLog;
+                                console.warn = originalWarn;
+                                console.error = originalError;
+                                console.error('EXIF.getData exception for', filename, ':', exifCallError.message, exifCallError.stack);
+                                console.log('EXIF messages before error:', exifLogs);
+                                return safeResolve(null);
+                            }
+                        } catch (outerExifError) {
+                            console.error('Outer EXIF processing error for', filename, ':', outerExifError.message, outerExifError.stack);
                             return safeResolve(null);
                         }
                     };
                     
                     img.onerror = function(err) {
-                        console.error('Image onload error for', filename, ':', err);
+                        console.error('Image onerror event for', filename, ':', err);
                         safeResolve(null);
                     };
-
+        
                     img.onabort = function() {
                         console.warn('Image load aborted for', filename);
                         safeResolve(null);
@@ -862,6 +905,9 @@
                 }
             });
         }
+        
+        
+    
 
         function isValidGPS(gpsData) {
             console.log('isValidGPS called for:', gpsData ? gpsData.filename : 'null');
