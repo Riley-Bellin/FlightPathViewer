@@ -717,98 +717,145 @@
 
         function extractGPS(buffer, filename) {
             return new Promise((resolve) => {
+                let url = null;
+                let img = null;
+                let extractionTimeout = null;
+
+                const cleanup = () => {
+                    if (extractionTimeout) clearTimeout(extractionTimeout);
+                    if (url) {
+                        try {
+                            URL.revokeObjectURL(url);
+                        } catch (e) {
+                            // Ignore cleanup errors
+                        }
+                    }
+                };
+
+                const safeResolve = (data) => {
+                    cleanup();
+                    resolve(data);
+                };
+
                 try {
                     if (!buffer || buffer.byteLength === 0) {
                         console.log(`Skipping ${filename}: empty buffer`);
-                        resolve(null);
-                        return;
+                        return safeResolve(null);
                     }
 
                     const blob = new Blob([buffer], { type: 'image/jpeg' });
-                    const url = URL.createObjectURL(blob);
+                    url = URL.createObjectURL(blob);
                     
-                    const img = new Image();
+                    img = new Image();
                     img.crossOrigin = "anonymous";
+                    
+                    // Set timeout to prevent hanging
+                    extractionTimeout = setTimeout(() => {
+                        console.warn(`Extraction timeout for ${filename}`);
+                        safeResolve(null);
+                    }, 5000);
                     
                     img.onload = function() {
                         try {
-                            EXIF.getData(img, function() {
-                                try {
-                                    const lat = EXIF.getTag(this, 'GPSLatitude');
-                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
-                                    const lon = EXIF.getTag(this, 'GPSLongitude');
-                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
-                                    const alt = EXIF.getTag(this, 'GPSAltitude');
+                            // Suppress EXIF library errors with error handler wrapper
+                            const originalConsoleError = console.error;
+                            const originalConsoleWarn = console.warn;
+                            let exifErrorOccurred = false;
 
-                                    if (!lat || !latRef || !lon || !lonRef) {
-                                        URL.revokeObjectURL(url);
-                                        resolve(null);
-                                        return;
-                                    }
-
-                                    const latitude = convertDMS(lat);
-                                    const longitude = convertDMS(lon);
-
-                                    if (latitude === null || longitude === null) {
-                                        URL.revokeObjectURL(url);
-                                        resolve(null);
-                                        return;
-                                    }
-
-                                    const finalLat = latRef === 'S' ? -latitude : latitude;
-                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
-                                    
-                                    let altitude = 0;
-                                    if (alt) {
-                                        altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
-                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
-                                    }
-
-                                    let camera = null;
-                                    const make = EXIF.getTag(this, 'Make');
-                                    const model = EXIF.getTag(this, 'Model');
-                                    if (make || model) {
-                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
-                                    }
-
-                                    URL.revokeObjectURL(url);
-                                    console.log(`SUCCESS: ${filename} - Lat: ${finalLat}, Lon: ${finalLon}, Alt: ${altitude}`);
-                                    resolve({
-                                        latitude: finalLat,
-                                        longitude: finalLon,
-                                        altitude: altitude,
-                                        filename: filename,
-                                        camera: camera,
-                                    });
-                                } catch (e) {
-                                    URL.revokeObjectURL(url);
-                                    console.error(`EXIF parse error for ${filename}:`, e.message);
-                                    resolve(null);
+                            console.error = function(...args) {
+                                // Ignore EXIF library format errors but log others
+                                if (!args[0] || typeof args[0] !== 'string' || !args[0].includes('thumbnail')) {
+                                    originalConsoleError.apply(console, args);
                                 }
-                            });
+                                exifErrorOccurred = true;
+                            };
+
+                            console.warn = function(...args) {
+                                if (!args[0] || typeof args[0] !== 'string' || !args[0].includes('thumbnail')) {
+                                    originalConsoleWarn.apply(console, args);
+                                }
+                            };
+
+                            try {
+                                EXIF.getData(img, function() {
+                                    try {
+                                        const lat = EXIF.getTag(this, 'GPSLatitude');
+                                        const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                        const lon = EXIF.getTag(this, 'GPSLongitude');
+                                        const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                        const alt = EXIF.getTag(this, 'GPSAltitude');
+
+                                        // Restore console functions
+                                        console.error = originalConsoleError;
+                                        console.warn = originalConsoleWarn;
+
+                                        if (!lat || !latRef || !lon || !lonRef) {
+                                            return safeResolve(null);
+                                        }
+
+                                        const latitude = convertDMS(lat);
+                                        const longitude = convertDMS(lon);
+
+                                        if (latitude === null || longitude === null) {
+                                            return safeResolve(null);
+                                        }
+
+                                        const finalLat = latRef === 'S' ? -latitude : latitude;
+                                        const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                        
+                                        let altitude = 0;
+                                        if (alt) {
+                                            altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
+                                            altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                        }
+
+                                        let camera = null;
+                                        const make = EXIF.getTag(this, 'Make');
+                                        const model = EXIF.getTag(this, 'Model');
+                                        if (make || model) {
+                                            camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                        }
+
+                                        safeResolve({
+                                            latitude: finalLat,
+                                            longitude: finalLon,
+                                            altitude: altitude,
+                                            filename: filename,
+                                            camera: camera,
+                                        });
+                                    } catch (e) {
+                                        console.error = originalConsoleError;
+                                        console.warn = originalConsoleWarn;
+                                        console.warn(`EXIF tag extraction error for ${filename}`);
+                                        safeResolve(null);
+                                    }
+                                });
+                            } catch (e) {
+                                console.error = originalConsoleError;
+                                console.warn = originalConsoleWarn;
+                                console.warn(`EXIF.getData error for ${filename}`);
+                                safeResolve(null);
+                            }
                         } catch (e) {
-                            URL.revokeObjectURL(url);
-                            console.error(`EXIF.getData error for ${filename}:`, e.message);
-                            resolve(null);
+                            console.error(`Image processing error for ${filename}`);
+                            safeResolve(null);
                         }
                     };
                     
                     img.onerror = function(err) {
-                        URL.revokeObjectURL(url);
-                        console.warn(`Image load error for ${filename}`);
-                        resolve(null);
+                        console.warn(`Failed to load image: ${filename}`);
+                        safeResolve(null);
                     };
 
                     img.onabort = function() {
-                        URL.revokeObjectURL(url);
-                        console.warn(`Image load aborted for ${filename}`);
-                        resolve(null);
+                        console.warn(`Image load aborted: ${filename}`);
+                        safeResolve(null);
                     };
                     
                     img.src = url;
                 } catch (error) {
                     console.error(`GPS extraction error for ${filename}:`, error.message);
-                    resolve(null);
+                    safeResolve(null);
                 }
             });
         }
