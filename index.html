@@ -588,6 +588,8 @@
         VALID_LON_RANGE: [-180, 180],
         VALID_ALT_RANGE: [-500, 50000],
         OUTLIER_IQR_MULTIPLIER: 4.0,
+        EXIF_TIMEOUT: 8000,
+        IMAGE_LOAD_TIMEOUT: 5000,
     };
 
     const state = {
@@ -739,9 +741,6 @@
                     s = dmsInput[2][0] / dmsInput[2][1];
                 } else {
                     console.log('DMS format: unrecognized format');
-                    console.log('Element 0:', dmsInput[0], 'has numerator?', dmsInput[0]?.hasOwnProperty('numerator'));
-                    console.log('Element 1:', dmsInput[1], 'has numerator?', dmsInput[1]?.hasOwnProperty('numerator'));
-                    console.log('Element 2:', dmsInput[2], 'has numerator?', dmsInput[2]?.hasOwnProperty('numerator'));
                     return null;
                 }
             } else {
@@ -770,9 +769,14 @@
         return new Promise((resolve) => {
             let url = null;
             let img = null;
+            let timeoutId = null;
+            let imageLoadTimeoutId = null;
+            let resolved = false;
 
             const cleanup = () => {
                 console.log('Cleaning up resources for:', filename);
+                if (timeoutId) clearTimeout(timeoutId);
+                if (imageLoadTimeoutId) clearTimeout(imageLoadTimeoutId);
                 if (url) {
                     try {
                         URL.revokeObjectURL(url);
@@ -781,9 +785,12 @@
                         console.error('Error revoking object URL for', filename, ':', cleanupError.message);
                     }
                 }
+                img = null;
             };
 
             const safeResolve = (data) => {
+                if (resolved) return;
+                resolved = true;
                 console.log('Safe resolve for', filename, 'with data:', data ? 'GPS data extracted' : 'null');
                 cleanup();
                 resolve(data);
@@ -804,7 +811,14 @@
                 img.crossOrigin = "anonymous";
                 console.log('Image object created for', filename);
                 
+                imageLoadTimeoutId = setTimeout(() => {
+                    console.warn('Image load timeout for', filename, '- took longer than', CONFIG.IMAGE_LOAD_TIMEOUT, 'ms');
+                    safeResolve(null);
+                }, CONFIG.IMAGE_LOAD_TIMEOUT);
+                
                 img.onload = function() {
+                    if (resolved) return;
+                    clearTimeout(imageLoadTimeoutId);
                     console.log('Image loaded for', filename, ', preparing EXIF extraction');
                     try {
                         const originalLog = console.log;
@@ -828,6 +842,14 @@
                             exifLogs.push('ERROR: ' + message);
                         };
 
+                        timeoutId = setTimeout(() => {
+                            console.log = originalLog;
+                            console.warn = originalWarn;
+                            console.error = originalError;
+                            console.warn('EXIF extraction timeout for', filename, '- took longer than', CONFIG.EXIF_TIMEOUT, 'ms');
+                            safeResolve(null);
+                        }, CONFIG.EXIF_TIMEOUT);
+
                         try {
                             console.log('Calling EXIF.getData for', filename);
                             
@@ -836,8 +858,10 @@
                                 console.warn = originalWarn;
                                 console.error = originalError;
                                 
+                                if (resolved) return;
+                                clearTimeout(timeoutId);
+                                
                                 console.log('EXIF.getData callback executed for', filename);
-                                console.log('EXIF library messages:', exifLogs);
                                 
                                 try {
                                     const lat = EXIF.getTag(this, 'GPSLatitude');
@@ -901,7 +925,7 @@
                                     console.log = originalLog;
                                     console.warn = originalWarn;
                                     console.error = originalError;
-                                    console.error('Error extracting EXIF tags for', filename, ':', tagError.message, tagError.stack);
+                                    console.error('Error extracting EXIF tags for', filename, ':', tagError.message);
                                     return safeResolve(null);
                                 }
                             });
@@ -909,22 +933,25 @@
                             console.log = originalLog;
                             console.warn = originalWarn;
                             console.error = originalError;
-                            console.error('EXIF.getData exception for', filename, ':', exifCallError.message, exifCallError.stack);
-                            console.log('EXIF messages before error:', exifLogs);
+                            console.error('EXIF.getData exception for', filename, ':', exifCallError.message);
                             return safeResolve(null);
                         }
                     } catch (outerExifError) {
-                        console.error('Outer EXIF processing error for', filename, ':', outerExifError.message, outerExifError.stack);
+                        console.error('Outer EXIF processing error for', filename, ':', outerExifError.message);
                         return safeResolve(null);
                     }
                 };
                 
                 img.onerror = function(err) {
-                    console.error('Image onerror event for', filename, ':', err);
+                    if (resolved) return;
+                    clearTimeout(imageLoadTimeoutId);
+                    console.warn('Image load error for', filename, ':', err);
                     safeResolve(null);
                 };
 
                 img.onabort = function() {
+                    if (resolved) return;
+                    clearTimeout(imageLoadTimeoutId);
                     console.warn('Image load aborted for', filename);
                     safeResolve(null);
                 };
@@ -932,7 +959,7 @@
                 console.log('Setting image src for', filename, ':', url);
                 img.src = url;
             } catch (error) {
-                console.error('GPS extraction try-catch error for', filename, ':', error.message, error.stack);
+                console.error('GPS extraction try-catch error for', filename, ':', error.message);
                 safeResolve(null);
             }
         });
@@ -969,7 +996,7 @@
             console.log('GPS validation passed for', gpsData.filename);
             return true;
         } catch (error) {
-            console.error('isValidGPS error:', error.message, error.stack);
+            console.error('isValidGPS error:', error.message);
             return false;
         }
     }
@@ -1027,7 +1054,7 @@
             console.log('Outlier detection complete - inliers:', inliers.length, 'outliers:', outliers.length);
             return { inliers, outliers };
         } catch (error) {
-            console.error('detectOutliers error:', error.message, error.stack);
+            console.error('detectOutliers error:', error.message);
             return { inliers: points, outliers: [] };
         }
     }
@@ -1124,7 +1151,7 @@
                             results.stats.noGPS++;
                         }
                     } catch (err) {
-                        console.error('File processing error for', file.name, ':', err.message, err.stack);
+                        console.error('File processing error for', file.name, ':', err.message);
                         results.stats.failed++;
                     }
                     
@@ -1164,7 +1191,7 @@
                 console.log('Processing complete successfully');
             }
         } catch (error) {
-            console.error('Processing error (outer catch):', error.message, error.stack);
+            console.error('Processing error (outer catch):', error.message);
             showMessage('Error during processing: ' + error.message, 'error');
         } finally {
             console.log('Processing cleanup');
@@ -1365,7 +1392,7 @@
             
             console.log('Plot rendering complete');
         } catch (error) {
-            console.error('Plot error:', error.message, error.stack);
+            console.error('Plot error:', error.message);
             showMessage('Error rendering plot', 'error');
         }
     }
@@ -1417,7 +1444,7 @@
             DOM.metadataPanel.classList.add('show');
             console.log('Metadata updated');
         } catch (error) {
-            console.error('Metadata update error:', error.message, error.stack);
+            console.error('Metadata update error:', error.message);
         }
     }
 
@@ -1428,7 +1455,7 @@
             DOM.progressFill.style.width = percent + '%';
             DOM.progressText.textContent = `${current} of ${total}`;
         } catch (error) {
-            console.error('updateProgress error:', error.message, error.stack);
+            console.error('updateProgress error:', error.message);
         }
     }
 
@@ -1438,7 +1465,7 @@
             DOM.messageBox.innerHTML = msg;
             DOM.messageBox.className = `message-box show ${type}`;
         } catch (error) {
-            console.error('showMessage error:', error.message, error.stack);
+            console.error('showMessage error:', error.message);
         }
     }
 
