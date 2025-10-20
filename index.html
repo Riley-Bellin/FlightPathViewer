@@ -250,6 +250,104 @@
             text-align: right;
             word-break: break-word;
         }
+
+        .console-panel {
+            background: #0a0a14;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 0;
+            font-size: 10px;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 200px;
+        }
+
+        .console-header {
+            background: #1a1a2e;
+            padding: 8px 12px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .console-header:hover {
+            background: #222;
+        }
+
+        .console-title {
+            color: #32CD32;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .console-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .console-btn {
+            background: #333;
+            border: none;
+            color: #888;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .console-btn:hover {
+            background: #444;
+            color: #e0e0e0;
+        }
+
+        .console-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 12px;
+            background: #0a0a14;
+            max-height: 160px;
+        }
+
+        .console-line {
+            margin: 2px 0;
+            line-height: 1.4;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .console-line.log {
+            color: #99ccff;
+        }
+
+        .console-line.warn {
+            color: #ffff99;
+        }
+
+        .console-line.error {
+            color: #ff9999;
+        }
+
+        .console-line.success {
+            color: #90ee90;
+        }
+
+        .console-line.timestamp {
+            color: #666;
+            font-size: 9px;
+        }
+
+        .console-empty {
+            color: #555;
+            font-style: italic;
+            padding: 20px 0;
+            text-align: center;
+        }
         
         .footer {
             font-size: 10px;
@@ -324,6 +422,19 @@
                 <h3>Flight Data</h3>
                 <div id="metadataContent"></div>
             </div>
+
+            <div class="console-panel" id="consolePanel">
+                <div class="console-header" id="consoleHeader">
+                    <span class="console-title">🖥️ Console</span>
+                    <div class="console-controls">
+                        <button class="console-btn" id="consoleClear" title="Clear console">Clear</button>
+                        <button class="console-btn" id="consoleToggle" title="Toggle">▼</button>
+                    </div>
+                </div>
+                <div class="console-content" id="consoleContent">
+                    <div class="console-empty">Ready</div>
+                </div>
+            </div>
             
             <div class="footer">
                 <p>Data stays on your device</p>
@@ -335,6 +446,141 @@
     </div>
 
     <script>
+        // Error Console System
+        class ErrorConsole {
+            constructor(contentElement, maxLines = 100) {
+                this.contentElement = contentElement;
+                this.maxLines = maxLines;
+                this.logs = [];
+                this.isExpanded = true;
+                this.init();
+            }
+
+            init() {
+                this.setupConsoleInterception();
+                this.setupControls();
+            }
+
+            setupConsoleInterception() {
+                const originalLog = console.log;
+                const originalWarn = console.warn;
+                const originalError = console.error;
+
+                console.log = (...args) => {
+                    originalLog(...args);
+                    this.addLog('log', args);
+                };
+
+                console.warn = (...args) => {
+                    originalWarn(...args);
+                    this.addLog('warn', args);
+                };
+
+                console.error = (...args) => {
+                    originalError(...args);
+                    this.addLog('error', args);
+                };
+
+                window.addEventListener('error', (event) => {
+                    this.addLog('error', [event.message]);
+                });
+
+                window.addEventListener('unhandledrejection', (event) => {
+                    this.addLog('error', ['Unhandled Promise Rejection:', event.reason]);
+                });
+            }
+
+            setupControls() {
+                const clearBtn = document.getElementById('consoleClear');
+                const toggleBtn = document.getElementById('consoleToggle');
+                const header = document.getElementById('consoleHeader');
+
+                clearBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.clear();
+                });
+
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggle();
+                });
+
+                header.addEventListener('click', () => {
+                    this.toggle();
+                });
+            }
+
+            addLog(type, args) {
+                const timestamp = new Date().toLocaleTimeString();
+                const message = args.map(arg => {
+                    if (typeof arg === 'object') {
+                        try {
+                            return JSON.stringify(arg);
+                        } catch (e) {
+                            return String(arg);
+                        }
+                    }
+                    return String(arg);
+                }).join(' ');
+
+                this.logs.push({ type, message, timestamp });
+
+                if (this.logs.length > this.maxLines) {
+                    this.logs.shift();
+                }
+
+                this.render();
+            }
+
+            render() {
+                if (this.logs.length === 0) {
+                    this.contentElement.innerHTML = '<div class="console-empty">Ready</div>';
+                    return;
+                }
+
+                this.contentElement.innerHTML = this.logs.map(log => 
+                    `<div class="console-line ${log.type}">
+                        <span class="console-line timestamp">[${log.timestamp}]</span> ${this.escapeHtml(log.message)}
+                    </div>`
+                ).join('');
+
+                this.contentElement.scrollTop = this.contentElement.scrollHeight;
+            }
+
+            clear() {
+                this.logs = [];
+                this.render();
+            }
+
+            toggle() {
+                this.isExpanded = !this.isExpanded;
+                const content = document.getElementById('consoleContent');
+                const toggleBtn = document.getElementById('consoleToggle');
+                
+                if (this.isExpanded) {
+                    content.style.display = 'block';
+                    toggleBtn.textContent = '▼';
+                } else {
+                    content.style.display = 'none';
+                    toggleBtn.textContent = '▶';
+                }
+            }
+
+            escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text.replace(/[&<>"']/g, m => map[m]);
+            }
+        }
+
+        // Initialize error console
+        const errorConsole = new ErrorConsole(document.getElementById('consoleContent'));
+
         const CONFIG = {
             MAX_FILES: 10000,
             VALID_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/bmp'],
@@ -646,6 +892,7 @@
             
             showMessage(`<span class="spinner"></span>Processing ${files.length} file(s)...`, 'info');
             DOM.progressContainer.classList.add('show');
+            console.log(`Starting processing of ${files.length} files`);
 
             const validFiles = files.filter(f => isImageFile(f));
             
@@ -704,6 +951,7 @@
                                     results.folderMap[folder].push(gpsData);
                                 } else {
                                     results.stats.failed++;
+                                    console.warn(`Invalid GPS data for ${file.name}`);
                                 }
                             } else {
                                 results.stats.noGPS++;
@@ -735,6 +983,7 @@
                     const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
                     const outlierMsg = results.outliers.length > 0 ? ` • ${results.outliers.length} outlier(s)` : '';
                     showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}${outlierMsg}`, 'success');
+                    console.log(`Processing complete: ${results.points.length} points plotted`);
                 }
             } catch (error) {
                 console.error('Processing error:', error);
@@ -983,6 +1232,9 @@
             DOM.messageBox.innerHTML = msg;
             DOM.messageBox.className = `message-box show ${type}`;
         }
+
+        // Log initialization
+        console.log('Flight Path Visualizer loaded and ready');
     </script>
 </body>
 </html>
