@@ -248,6 +248,7 @@
         .metadata-value {
             color: #32CD32;
             text-align: right;
+            word-break: break-word;
         }
         
         .footer {
@@ -535,6 +536,19 @@
             }
         }
 
+        function bytesToString(byteArray) {
+            if (!byteArray) return null;
+            try {
+                if (typeof byteArray === 'string') return byteArray;
+                if (byteArray instanceof Uint8Array || Array.isArray(byteArray)) {
+                    return String.fromCharCode.apply(null, byteArray).replace(/\0/g, '').trim();
+                }
+                return String(byteArray).replace(/\0/g, '').trim();
+            } catch (e) {
+                return null;
+            }
+        }
+
         function extractGPS(buffer, filename) {
             try {
                 if (!buffer || buffer.byteLength === 0) {
@@ -554,6 +568,7 @@
 
                 const gps = exifData.GPS;
 
+                // Extract Latitude
                 const latArray = gps[PIEXIF.GPSIFD.GPSLatitude];
                 const latRef = gps[PIEXIF.GPSIFD.GPSLatitudeRef];
                 if (!latArray || !latRef) {
@@ -564,8 +579,11 @@
                 if (latitude === null) {
                     return null;
                 }
-                const lat = latRef === b'S' ? -latitude : latitude;
+                
+                const latRefStr = bytesToString(latRef);
+                const lat = latRefStr === 'S' ? -latitude : latitude;
 
+                // Extract Longitude
                 const lonArray = gps[PIEXIF.GPSIFD.GPSLongitude];
                 const lonRef = gps[PIEXIF.GPSIFD.GPSLongitudeRef];
                 if (!lonArray || !lonRef) {
@@ -576,19 +594,24 @@
                 if (longitude === null) {
                     return null;
                 }
-                const lon = lonRef === b'W' ? -longitude : longitude;
+                
+                const lonRefStr = bytesToString(lonRef);
+                const lon = lonRefStr === 'W' ? -longitude : longitude;
 
+                // Extract Altitude
                 const altitude = extractAltitude(gps);
 
+                // Extract Camera Info
                 let camera = null;
                 if (exifData['0th']) {
                     const make = exifData['0th'][PIEXIF.ImageIFD.Make];
                     const model = exifData['0th'][PIEXIF.ImageIFD.Model];
-                    if (make && model) {
+                    
+                    if (make || model) {
                         try {
-                            const makeStr = make[0].toString().split('\0')[0].trim();
-                            const modelStr = model[0].toString().split('\0')[0].trim();
-                            camera = `${makeStr} ${modelStr}`.trim();
+                            const makeStr = make ? bytesToString(make) : null;
+                            const modelStr = model ? bytesToString(model) : null;
+                            camera = [makeStr, modelStr].filter(Boolean).join(' ').trim() || null;
                         } catch (e) {
                             camera = null;
                         }
@@ -610,10 +633,10 @@
 
         function extractAltitude(gps) {
             try {
-                const relAltTag = gps[PIEXIF.GPSIFD.GPSAltitude];
-                if (relAltTag && relAltTag[0] && relAltTag[1]) {
-                    const altitude = relAltTag[0] / relAltTag[1];
-                    return isFinite(altitude) ? altitude : 0;
+                const altTag = gps[PIEXIF.GPSIFD.GPSAltitude];
+                if (altTag && altTag[0] !== undefined && altTag[1] !== undefined) {
+                    const altitude = altTag[0] / altTag[1];
+                    return isFinite(altitude) && altitude >= 0 ? altitude : 0;
                 }
                 return 0;
             } catch (e) {
@@ -623,7 +646,7 @@
 
         function convertDMS(dmsArray) {
             try {
-                if (!dmsArray || dmsArray.length < 3) {
+                if (!Array.isArray(dmsArray) || dmsArray.length < 3) {
                     return null;
                 }
 
@@ -751,6 +774,10 @@
                 
                 if (results.stats.noGPS > 0) {
                     html += `<div class="metadata-row"><span class="metadata-label">No GPS Data:</span><span class="metadata-value">${results.stats.noGPS}</span></div>`;
+                }
+                
+                if (results.stats.failed > 0) {
+                    html += `<div class="metadata-row"><span class="metadata-label">Failed:</span><span class="metadata-value">${results.stats.failed}</span></div>`;
                 }
                 
                 if (results.metadata.lats.length > 0) {
