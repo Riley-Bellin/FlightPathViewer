@@ -696,7 +696,7 @@
     }
 
     function convertDMS(dmsInput) {
-        console.log('convertDMS RAW INPUT:', JSON.stringify(dmsInput), 'typeof:', typeof dmsInput);
+        console.log('convertDMS called with input:', JSON.stringify(dmsInput));
         try {
             let d, m, s;
 
@@ -712,46 +712,52 @@
                 s = parseFloat(parts[2]);
             } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
                 console.log('DMS input is array, length:', dmsInput.length);
-                console.log('Array element 0 - value:', dmsInput[0], 'typeof:', typeof dmsInput[0]);
-                console.log('Array element 1 - value:', dmsInput[1], 'typeof:', typeof dmsInput[1]);
-                console.log('Array element 2 - value:', dmsInput[2], 'typeof:', typeof dmsInput[2]);
-                
-                if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
+
+                let isObjectArray = false;
+                if (dmsInput[0] && typeof dmsInput[0] === 'object' && !Array.isArray(dmsInput[0])) {
+                    console.log('Detected object array format - checking for numerator/denominator');
+                    if (dmsInput[0].hasOwnProperty('numerator') && dmsInput[0].hasOwnProperty('denominator')) {
+                        isObjectArray = true;
+                    }
+                }
+
+                if (isObjectArray) {
+                    console.log('DMS format: object array with numerator/denominator');
+                    d = dmsInput[0].numerator / dmsInput[0].denominator;
+                    m = dmsInput[1].numerator / dmsInput[1].denominator;
+                    s = dmsInput[2].numerator / dmsInput[2].denominator;
+                    console.log('Extracted from fraction objects - d:', d, 'm:', m, 's:', s);
+                } else if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
                     console.log('DMS format: simple array of numbers');
                     d = dmsInput[0];
                     m = dmsInput[1];
                     s = dmsInput[2];
-                }
-                else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
+                } else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
                     console.log('DMS format: array of fraction pairs');
-                    console.log('Fraction pair 0:', dmsInput[0]);
-                    console.log('Fraction pair 1:', dmsInput[1]);
-                    console.log('Fraction pair 2:', dmsInput[2]);
                     d = dmsInput[0][0] / dmsInput[0][1];
                     m = dmsInput[1][0] / dmsInput[1][1];
                     s = dmsInput[2][0] / dmsInput[2][1];
                 } else {
-                    console.log('DMS format: unrecognized array format');
-                    console.log('Element 0 is array?', Array.isArray(dmsInput[0]));
-                    console.log('Element 1 is array?', Array.isArray(dmsInput[1]));
-                    console.log('Element 2 is array?', Array.isArray(dmsInput[2]));
+                    console.log('DMS format: unrecognized format');
+                    console.log('Element 0:', dmsInput[0], 'has numerator?', dmsInput[0]?.hasOwnProperty('numerator'));
+                    console.log('Element 1:', dmsInput[1], 'has numerator?', dmsInput[1]?.hasOwnProperty('numerator'));
+                    console.log('Element 2:', dmsInput[2], 'has numerator?', dmsInput[2]?.hasOwnProperty('numerator'));
                     return null;
                 }
             } else {
-                console.log('DMS input is invalid format, type:', typeof dmsInput, 'isArray:', Array.isArray(dmsInput), 'length:', dmsInput ? dmsInput.length : 'N/A');
+                console.log('DMS input is invalid format');
                 return null;
             }
 
-            console.log('DMS components extracted - d:', d, 'm:', m, 's:', s);
+            console.log('DMS components - d:', d, 'm:', m, 's:', s);
 
             if (!isFinite(d) || !isFinite(m) || !isFinite(s)) {
-                console.log('DMS values not finite - d:', d, 'm:', m, 's:', s);
+                console.log('DMS values not finite');
                 return null;
             }
 
             const result = d + (m / 60) + (s / 3600);
-            console.log('DMS conversion calculation: d + (m/60) + (s/3600) = ', d, '+ (', m, '/60) + (', s, '/3600) = ', result);
-            console.log('DMS conversion result:', result, 'isFinite:', isFinite(result));
+            console.log('DMS conversion: d + (m/60) + (s/3600) =', d, '+ (', m, '/60) + (', s, '/3600) =', result);
             return isFinite(result) ? result : null;
         } catch (e) {
             console.error('convertDMS error:', e.message, e.stack);
@@ -840,11 +846,7 @@
                                     const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
                                     const alt = EXIF.getTag(this, 'GPSAltitude');
 
-                                    console.log('RAW EXIF TAG RETURNED - GPSLatitude:', JSON.stringify(lat), 'type:', typeof lat);
-                                    console.log('RAW EXIF TAG RETURNED - GPSLatitudeRef:', latRef);
-                                    console.log('RAW EXIF TAG RETURNED - GPSLongitude:', JSON.stringify(lon), 'type:', typeof lon);
-                                    console.log('RAW EXIF TAG RETURNED - GPSLongitudeRef:', lonRef);
-                                    console.log('RAW EXIF TAG RETURNED - GPSAltitude:', JSON.stringify(alt), 'type:', typeof alt);
+                                    console.log('EXIF tags retrieved for', filename, '- lat:', lat ? 'present' : 'missing', 'latRef:', latRef, 'lon:', lon ? 'present' : 'missing', 'lonRef:', lonRef);
 
                                     if (!lat || !latRef || !lon || !lonRef) {
                                         console.log('Missing required GPS tags for', filename);
@@ -868,7 +870,11 @@
 
                                     let altitude = 0;
                                     if (alt) {
-                                        altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
+                                        if (alt.numerator !== undefined && alt.denominator !== undefined) {
+                                            altitude = alt.numerator / alt.denominator;
+                                        } else if (typeof alt === 'number') {
+                                            altitude = alt;
+                                        }
                                         altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
                                         console.log('Altitude extracted for', filename, ':', altitude);
                                     } else {
