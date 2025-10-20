@@ -696,11 +696,14 @@
             return isValidType || isValidExtension;
         }
 
+
+
+
         function convertDMS(dmsInput) {
             console.log('convertDMS called with input:', dmsInput);
             try {
                 let d, m, s;
-
+        
                 if (typeof dmsInput === 'string') {
                     console.log('DMS input is string');
                     const parts = dmsInput.split(',');
@@ -712,22 +715,39 @@
                     m = parseFloat(parts[1]);
                     s = parseFloat(parts[2]);
                 } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
-                    console.log('DMS input is array');
-                    d = dmsInput[0][0] / dmsInput[0][1];
-                    m = dmsInput[1][0] / (dmsInput[1][1] * 60);
-                    s = dmsInput[2][0] / (dmsInput[2][1] * 3600);
+                    console.log('DMS input is array, checking format');
+                    
+                    // Check if it's a simple array of numbers [39, 55, 48.736]
+                    if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
+                        console.log('DMS format: simple array of numbers');
+                        d = dmsInput[0];
+                        m = dmsInput[1];
+                        s = dmsInput[2];
+                    }
+                    // Check if it's an array of fraction arrays [[39,1], [55,1], [48.736,1]]
+                    else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
+                        console.log('DMS format: array of fraction pairs');
+                        d = dmsInput[0][0] / dmsInput[0][1];
+                        m = dmsInput[1][0] / (dmsInput[1][1] * 60);
+                        s = dmsInput[2][0] / (dmsInput[2][1] * 3600);
+                    } else {
+                        console.log('DMS format: unrecognized array format');
+                        return null;
+                    }
                 } else {
-                    console.log('DMS input is invalid format');
+                    console.log('DMS input is invalid format, type:', typeof dmsInput);
                     return null;
                 }
-
+        
+                console.log('DMS components - d:', d, 'm:', m, 's:', s);
+        
                 if (!isFinite(d) || !isFinite(m) || !isFinite(s)) {
                     console.log('DMS values not finite - d:', d, 'm:', m, 's:', s);
                     return null;
                 }
-
+        
                 const result = d + m + s;
-                console.log('DMS conversion result:', result);
+                console.log('DMS conversion result:', result, 'isFinite:', isFinite(result));
                 return isFinite(result) ? result : null;
             } catch (e) {
                 console.error('convertDMS error:', e.message, e.stack);
@@ -736,7 +756,7 @@
         }
 
 
-    
+        
         function extractGPS(buffer, filename) {
             console.log('extractGPS called for file:', filename, 'buffer size:', buffer ? buffer.byteLength : 'null');
             return new Promise((resolve) => {
