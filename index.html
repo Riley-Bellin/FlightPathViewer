@@ -231,11 +231,11 @@
         <div id="sidebar">
             <div>
                 <h1>Flight Path Visualizer</h1>
-                <p class="subtitle">Drag folder or select images with GPS data</p>
+                <p class="subtitle">Select images with GPS data to visualize flight path</p>
             </div>
             
             <div class="upload-section" id="uploadArea">
-                <p>Drag folder here or click to select</p>
+                <p>📁 Drag folder here or click to select</p>
                 <button class="upload-btn" onclick="selectFolder()">Select Folder/Files</button>
                 <input type="file" id="fileInput" multiple accept="image/*" webkitdirectory>
             </div>
@@ -248,14 +248,14 @@
             </div>
             
             <div class="footer">
-                <p>Data never leaves your device</p>
-                <p>Works offline</p>
+                <p>✓ Data never leaves your device</p>
+                <p>✓ Works offline</p>
             </div>
         </div>
         
         <div id="main-plot">
             <div class="placeholder-text">
-                <p>Select folder or images to visualize flight path</p>
+                <p>Select images to visualize flight path</p>
             </div>
         </div>
     </div>
@@ -338,7 +338,7 @@
             const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
             
             if (imageFiles.length === 0) {
-                showStatus('No image files found', 'error');
+                showStatus('No image files selected', 'error');
                 return;
             }
 
@@ -539,18 +539,18 @@
             html += `<div class="metadata-row"><span class="metadata-label">Points:</span><span class="metadata-value">${points.length}</span></div>`;
             
             if (metadata.latRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Latitude Range:</span><span class="metadata-value">${metadata.latRange[0].toFixed(4)}°</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Latitude:</span><span class="metadata-value">${metadata.latRange[0].toFixed(4)}°</span></div>`;
                 html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.latRange[metadata.latRange.length - 1].toFixed(4)}°</span></div>`;
             }
             
             if (metadata.lonRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Longitude Range:</span><span class="metadata-value">${metadata.lonRange[0].toFixed(4)}°</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Longitude:</span><span class="metadata-value">${metadata.lonRange[0].toFixed(4)}°</span></div>`;
                 html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.lonRange[metadata.lonRange.length - 1].toFixed(4)}°</span></div>`;
             }
             
             if (metadata.altRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Altitude Min:</span><span class="metadata-value">${Math.min(...metadata.altRange).toFixed(0)}m</span></div>`;
-                html += `<div class="metadata-row"><span class="metadata-label">Altitude Max:</span><span class="metadata-value">${Math.max(...metadata.altRange).toFixed(0)}m</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Altitude:</span><span class="metadata-value">${Math.min(...metadata.altRange).toFixed(0)}m</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${Math.max(...metadata.altRange).toFixed(0)}m</span></div>`;
             }
             
             if (metadata.cameras.size > 0) {
