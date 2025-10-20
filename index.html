@@ -13,11 +13,16 @@
             box-sizing: border-box;
         }
         
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: #e0e0e0;
-            min-height: 100vh;
         }
         
         .container {
@@ -28,44 +33,47 @@
         
         #sidebar {
             width: 380px;
-            background: rgba(10, 10, 20, 0.95);
-            padding: 25px;
+            background: rgba(10, 10, 20, 0.98);
+            padding: 20px;
             overflow-y: auto;
             border-right: 1px solid #333;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
         }
         
         #main-plot {
             flex: 1;
             overflow: hidden;
             background: #0f0f1e;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         h1 {
             color: #32CD32;
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 22px;
+            margin: 0;
+            font-weight: 600;
         }
         
         .subtitle {
-            font-size: 12px;
+            font-size: 11px;
             color: #888;
-            margin-bottom: 20px;
+            margin: 5px 0 0 0;
         }
         
         .upload-section {
             background: #1a1a2e;
             border: 2px dashed #32CD32;
             border-radius: 8px;
-            padding: 20px;
+            padding: 18px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
         
         .upload-section:hover {
@@ -74,72 +82,138 @@
             box-shadow: 0 0 10px rgba(50, 205, 50, 0.3);
         }
         
-        .upload-section p {
-            font-size: 14px;
-            margin-bottom: 10px;
+        .upload-section.drag-over {
+            background: #1f3a1f;
+            border-color: #44ff44;
+            box-shadow: 0 0 15px rgba(50, 205, 50, 0.5);
         }
         
-        #fileInput {
-            display: none;
+        .upload-section p {
+            font-size: 13px;
+            margin-bottom: 10px;
+            line-height: 1.4;
         }
         
         .upload-btn {
             background: #32CD32;
             color: #000;
             border: none;
-            padding: 10px 20px;
+            padding: 9px 18px;
             border-radius: 6px;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 14px;
-            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
             width: 100%;
+            margin-top: 8px;
         }
         
         .upload-btn:hover {
             background: #44ff44;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(50, 205, 50, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(50, 205, 50, 0.3);
         }
         
         .upload-btn:active {
             transform: translateY(0);
         }
         
-        .status {
-            background: #1a1a2e;
-            padding: 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            line-height: 1.6;
+        .upload-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        #fileInput {
             display: none;
         }
         
-        .status.show {
+        .message-box {
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            display: none;
+        }
+        
+        .message-box.show {
             display: block;
+            animation: slideIn 0.2s ease;
         }
         
-        .status.success {
+        .message-box.success {
+            background: #1a3a1a;
             border-left: 4px solid #32CD32;
+            color: #90ee90;
         }
         
-        .status.error {
+        .message-box.error {
+            background: #3a1a1a;
             border-left: 4px solid #ff4136;
-            color: #ff6b6b;
+            color: #ff9999;
         }
         
-        .status.processing {
+        .message-box.warning {
+            background: #3a3a1a;
             border-left: 4px solid #ffdc00;
-            color: #ffd700;
+            color: #ffff99;
+        }
+        
+        .message-box.info {
+            background: #1a2a3a;
+            border-left: 4px solid #0099ff;
+            color: #99ccff;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .progress-container {
+            display: none;
+            gap: 8px;
+        }
+        
+        .progress-container.show {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #32CD32;
+            transition: width 0.2s ease;
+            border-radius: 3px;
+        }
+        
+        .progress-text {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
         }
         
         .metadata-panel {
             background: #1a1a2e;
             border-radius: 8px;
-            padding: 15px;
-            font-size: 12px;
-            line-height: 1.7;
-            max-height: 400px;
+            padding: 12px;
+            font-size: 11px;
+            line-height: 1.6;
+            max-height: 350px;
             overflow-y: auto;
             display: none;
         }
@@ -150,15 +224,16 @@
         
         .metadata-panel h3 {
             color: #32CD32;
-            margin-bottom: 10px;
-            font-size: 14px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 600;
         }
         
         .metadata-row {
             display: flex;
             justify-content: space-between;
-            padding: 6px 0;
-            border-bottom: 1px solid #333;
+            padding: 5px 0;
+            border-bottom: 1px solid #2a2a2a;
         }
         
         .metadata-row:last-child {
@@ -175,31 +250,25 @@
             text-align: right;
         }
         
-        .placeholder-text {
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-            padding: 40px;
-        }
-        
         .footer {
-            font-size: 11px;
+            font-size: 10px;
             color: #555;
             margin-top: auto;
             text-align: center;
-            padding-top: 20px;
+            padding-top: 15px;
             border-top: 1px solid #333;
+            line-height: 1.4;
         }
         
         .spinner {
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            width: 11px;
+            height: 11px;
             border: 2px solid #444;
             border-top-color: #32CD32;
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
+            animation: spin 0.7s linear infinite;
+            margin-right: 6px;
             vertical-align: middle;
         }
         
@@ -214,7 +283,6 @@
             
             #sidebar {
                 width: 100%;
-                height: auto;
                 max-height: 40vh;
                 border-right: none;
                 border-bottom: 1px solid #333;
@@ -231,16 +299,25 @@
         <div id="sidebar">
             <div>
                 <h1>Flight Path Visualizer</h1>
-                <p class="subtitle">Select images with GPS data to visualize flight path</p>
+                <p class="subtitle">Visualize drone flight paths from GPS image data</p>
             </div>
             
-            <div class="upload-section" id="uploadArea">
-                <p>📁 Drag folder here or click to select</p>
-                <button class="upload-btn" onclick="selectFolder()">Select Folder/Files</button>
-                <input type="file" id="fileInput" multiple accept="image/*" webkitdirectory>
+            <div class="upload-section" id="uploadArea" role="button" tabindex="0" aria-label="Drag and drop images here or click button">
+                <p style="font-size: 24px; margin: 0 0 8px 0;">📁</p>
+                <p>Drag folder or click below</p>
+                <button class="upload-btn" id="selectBtn" aria-label="Select images to visualize">Select Images</button>
             </div>
             
-            <div class="status" id="status"></div>
+            <input type="file" id="fileInput" multiple accept="image/*" aria-hidden="true">
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText"></div>
+            </div>
+            
+            <div class="message-box" id="message" role="status" aria-live="polite"></div>
             
             <div class="metadata-panel" id="metadataPanel">
                 <h3>Flight Data</h3>
@@ -248,341 +325,476 @@
             </div>
             
             <div class="footer">
-                <p>✓ Data never leaves your device</p>
-                <p>✓ Works offline</p>
+                <p>Data stays on your device</p>
+                <p>No upload to any server</p>
             </div>
         </div>
         
-        <div id="main-plot">
-            <div class="placeholder-text">
-                <p>Select images to visualize flight path</p>
-            </div>
-        </div>
+        <div id="main-plot"></div>
     </div>
 
     <script>
-        const fileInput = document.getElementById('fileInput');
-        const uploadArea = document.getElementById('uploadArea');
-        const statusDiv = document.getElementById('status');
-        const metadataPanel = document.getElementById('metadataPanel');
-        const metadataContent = document.getElementById('metadataContent');
-        const plotDiv = document.getElementById('main-plot');
+        const CONFIG = {
+            MAX_FILES: 10000,
+            VALID_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/bmp'],
+            BATCH_SIZE: 20,
+            VALID_LAT_RANGE: [-90, 90],
+            VALID_LON_RANGE: [-180, 180],
+            VALID_ALT_RANGE: [-500, 50000],
+        };
 
-        // Drag and drop with folder support
-        uploadArea.addEventListener('dragover', e => {
+        const state = {
+            isProcessing: false,
+        };
+
+        const DOM = {
+            fileInput: document.getElementById('fileInput'),
+            selectBtn: document.getElementById('selectBtn'),
+            uploadArea: document.getElementById('uploadArea'),
+            messageBox: document.getElementById('message'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressFill: document.getElementById('progressFill'),
+            progressText: document.getElementById('progressText'),
+            metadataPanel: document.getElementById('metadataPanel'),
+            metadataContent: document.getElementById('metadataContent'),
+            plotDiv: document.getElementById('main-plot'),
+        };
+
+        DOM.selectBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            uploadArea.style.backgroundColor = '#222';
+            e.stopPropagation();
+            DOM.fileInput.click();
         });
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.backgroundColor = '';
+        DOM.fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                processFiles(Array.from(e.target.files));
+            }
         });
 
-        uploadArea.addEventListener('drop', async e => {
+        DOM.uploadArea.addEventListener('dragenter', (e) => {
             e.preventDefault();
-            uploadArea.style.backgroundColor = '';
+            e.stopPropagation();
+            DOM.uploadArea.classList.add('drag-over');
+        });
+
+        DOM.uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        DOM.uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            DOM.uploadArea.classList.remove('drag-over');
+        });
+
+        DOM.uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            DOM.uploadArea.classList.remove('drag-over');
             
-            const items = e.dataTransfer.items;
-            const files = [];
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const files = Array.from(e.dataTransfer.files);
+                handleDroppedFiles(files);
+            }
+        });
+
+        DOM.uploadArea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                DOM.fileInput.click();
+            }
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        async function handleDroppedFiles(files) {
+            const imageFiles = [];
             
-            // Handle dragged folders/files
-            for (let item of items) {
-                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-                if (entry) {
-                    const fileList = await getAllFilesFromEntry(entry);
-                    files.push(...fileList);
-                } else {
-                    // Fallback for unsupported browsers
-                    if (item.kind === 'file') {
-                        files.push(item.getAsFile());
-                    }
+            for (const file of files) {
+                if (isImageFile(file)) {
+                    imageFiles.push(file);
                 }
             }
-            
-            if (files.length > 0) {
-                handleFiles(files);
-            }
-        });
 
-        async function getAllFilesFromEntry(entry, path = '') {
-            const files = [];
-            
-            if (entry.isFile) {
-                files.push(await new Promise((resolve, reject) => {
-                    entry.file(resolve, reject);
-                }));
-            } else if (entry.isDirectory) {
-                const reader = entry.createReader();
-                const entries = await new Promise((resolve, reject) => {
-                    reader.readEntries(resolve, reject);
-                });
-                
-                for (let childEntry of entries) {
-                    const childFiles = await getAllFilesFromEntry(childEntry, path + entry.name + '/');
-                    files.push(...childFiles);
-                }
-            }
-            
-            return files;
-        }
-
-        fileInput.addEventListener('change', e => {
-            handleFiles(e.target.files);
-        });
-
-        function selectFolder() {
-            fileInput.click();
-        }
-
-        async function handleFiles(files) {
-            const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-            
             if (imageFiles.length === 0) {
-                showStatus('No image files selected', 'error');
+                showMessage('No image files found. Supported: JPG, PNG, TIFF, WebP, BMP', 'error');
                 return;
             }
 
-            showStatus(`<span class="spinner"></span>Processing ${imageFiles.length} image(s)...`, 'processing');
+            processFiles(imageFiles);
+        }
+
+        function isImageFile(file) {
+            return CONFIG.VALID_IMAGE_TYPES.includes(file.type) || 
+                   /\.(jpg|jpeg|png|tiff|tif|webp|bmp)$/i.test(file.name);
+        }
+
+        async function processFiles(files) {
+            if (state.isProcessing) {
+                showMessage('Already processing. Please wait.', 'warning');
+                return;
+            }
+
+            state.isProcessing = true;
+            DOM.selectBtn.disabled = true;
             
-            const points = [];
-            const metadata = {
-                cameras: new Set(),
-                timeRange: [],
-                latRange: [],
-                lonRange: [],
-                altRange: [],
+            showMessage(`<span class="spinner"></span>Processing ${files.length} file(s)...`, 'info');
+            DOM.progressContainer.classList.add('show');
+
+            const validFiles = files.filter(f => isImageFile(f));
+            
+            if (validFiles.length === 0) {
+                showMessage('No valid image files found', 'error');
+                state.isProcessing = false;
+                DOM.selectBtn.disabled = false;
+                DOM.progressContainer.classList.remove('show');
+                return;
+            }
+
+            const results = {
+                points: [],
+                stats: {
+                    processed: 0,
+                    gpsFound: 0,
+                    noGPS: 0,
+                    failed: 0,
+                },
+                metadata: {
+                    cameras: new Set(),
+                    lats: [],
+                    lons: [],
+                    alts: [],
+                },
             };
 
-            for (let file of imageFiles) {
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const gpsData = extractGPS(arrayBuffer);
+            try {
+                for (let i = 0; i < validFiles.length; i += CONFIG.BATCH_SIZE) {
+                    const batch = validFiles.slice(i, i + CONFIG.BATCH_SIZE);
                     
-                    if (gpsData) {
-                        points.push({
-                            lat: gpsData.latitude,
-                            lon: gpsData.longitude,
-                            alt: gpsData.altitude,
-                            filename: file.name,
-                        });
-
-                        metadata.latRange.push(gpsData.latitude);
-                        metadata.lonRange.push(gpsData.longitude);
-                        metadata.altRange.push(gpsData.altitude);
+                    await Promise.all(batch.map(async (file) => {
+                        try {
+                            const buffer = await file.arrayBuffer();
+                            const gpsData = extractGPS(buffer, file.name);
+                            
+                            if (gpsData) {
+                                if (isValidGPS(gpsData)) {
+                                    results.points.push(gpsData);
+                                    results.metadata.lats.push(gpsData.latitude);
+                                    results.metadata.lons.push(gpsData.longitude);
+                                    results.metadata.alts.push(gpsData.altitude);
+                                    results.stats.gpsFound++;
+                                    
+                                    if (gpsData.camera) {
+                                        results.metadata.cameras.add(gpsData.camera);
+                                    }
+                                } else {
+                                    results.stats.failed++;
+                                }
+                            } else {
+                                results.stats.noGPS++;
+                            }
+                        } catch (err) {
+                            console.warn('File processing error:', err);
+                            results.stats.failed++;
+                        }
                         
-                        if (gpsData.camera) metadata.cameras.add(gpsData.camera);
-                        if (gpsData.timestamp) metadata.timeRange.push(gpsData.timestamp);
-                    }
-                } catch (error) {
-                    console.error(`Error processing ${file.name}:`, error);
+                        results.stats.processed++;
+                        updateProgress(results.stats.processed, validFiles.length);
+                    }));
                 }
+
+                if (results.points.length === 0) {
+                    const message = results.stats.noGPS > 0 
+                        ? `No GPS data found in any of the ${validFiles.length} image(s).`
+                        : 'Could not extract GPS data from files.';
+                    showMessage(message, 'error');
+                } else {
+                    results.points.sort((a, b) => a.filename.localeCompare(b.filename));
+                    renderPlot(results.points);
+                    updateMetadata(results);
+                    const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
+                    showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}`, 'success');
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                showMessage('Error during processing: ' + error.message, 'error');
+            } finally {
+                state.isProcessing = false;
+                DOM.selectBtn.disabled = false;
+                DOM.progressContainer.classList.remove('show');
             }
-
-            if (points.length === 0) {
-                showStatus('No GPS data found in images', 'error');
-                return;
-            }
-
-            // Sort by timestamp if available
-            points.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-
-            renderPlot(points);
-            updateMetadata(points, metadata);
-            showStatus(`Successfully plotted ${points.length} points from ${imageFiles.length} image(s)`, 'success');
         }
 
-        function extractGPS(arrayBuffer) {
+        function extractGPS(buffer, filename) {
             try {
-                const exifData = PIEXIF.load(arrayBuffer);
-                
-                if (!exifData.GPS) return null;
+                if (!buffer || buffer.byteLength === 0) {
+                    return null;
+                }
+
+                let exifData;
+                try {
+                    exifData = PIEXIF.load(buffer);
+                } catch (e) {
+                    return null;
+                }
+
+                if (!exifData || !exifData.GPS) {
+                    return null;
+                }
 
                 const gps = exifData.GPS;
-                
-                // Extract latitude
+
                 const latArray = gps[PIEXIF.GPSIFD.GPSLatitude];
-                if (!latArray) return null;
-                const latitude = latArray[0][0] / latArray[0][1] + 
-                               latArray[1][0] / (latArray[1][1] * 60) + 
-                               latArray[2][0] / (latArray[2][1] * 3600);
                 const latRef = gps[PIEXIF.GPSIFD.GPSLatitudeRef];
+                if (!latArray || !latRef) {
+                    return null;
+                }
+
+                const latitude = convertDMS(latArray);
+                if (latitude === null) {
+                    return null;
+                }
                 const lat = latRef === b'S' ? -latitude : latitude;
 
-                // Extract longitude
                 const lonArray = gps[PIEXIF.GPSIFD.GPSLongitude];
-                if (!lonArray) return null;
-                const longitude = lonArray[0][0] / lonArray[0][1] + 
-                                lonArray[1][0] / (lonArray[1][1] * 60) + 
-                                lonArray[2][0] / (lonArray[2][1] * 3600);
                 const lonRef = gps[PIEXIF.GPSIFD.GPSLongitudeRef];
+                if (!lonArray || !lonRef) {
+                    return null;
+                }
+
+                const longitude = convertDMS(lonArray);
+                if (longitude === null) {
+                    return null;
+                }
                 const lon = lonRef === b'W' ? -longitude : longitude;
 
-                // Extract altitude
-                const altArray = gps[PIEXIF.GPSIFD.GPSAltitude];
-                const altitude = altArray ? altArray[0] / altArray[1] : 0;
+                const altitude = extractAltitude(gps);
 
-                // Extract camera info from IFD 0
                 let camera = null;
                 if (exifData['0th']) {
                     const make = exifData['0th'][PIEXIF.ImageIFD.Make];
                     const model = exifData['0th'][PIEXIF.ImageIFD.Model];
                     if (make && model) {
-                        camera = `${make[0].toString().split('\0')[0]} ${model[0].toString().split('\0')[0]}`;
+                        try {
+                            const makeStr = make[0].toString().split('\0')[0].trim();
+                            const modelStr = model[0].toString().split('\0')[0].trim();
+                            camera = `${makeStr} ${modelStr}`.trim();
+                        } catch (e) {
+                            camera = null;
+                        }
                     }
                 }
 
-                return { latitude: lat, longitude: lon, altitude, camera };
+                return {
+                    latitude: lat,
+                    longitude: lon,
+                    altitude: altitude,
+                    filename: filename,
+                    camera: camera,
+                };
             } catch (error) {
-                console.error('EXIF extraction error:', error);
+                console.warn(`GPS extraction error for ${filename}:`, error);
                 return null;
             }
         }
 
+        function extractAltitude(gps) {
+            try {
+                const relAltTag = gps[PIEXIF.GPSIFD.GPSAltitude];
+                if (relAltTag && relAltTag[0] && relAltTag[1]) {
+                    const altitude = relAltTag[0] / relAltTag[1];
+                    return isFinite(altitude) ? altitude : 0;
+                }
+                return 0;
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function convertDMS(dmsArray) {
+            try {
+                if (!dmsArray || dmsArray.length < 3) {
+                    return null;
+                }
+
+                const d = dmsArray[0][0] / dmsArray[0][1];
+                const m = dmsArray[1][0] / (dmsArray[1][1] * 60);
+                const s = dmsArray[2][0] / (dmsArray[2][1] * 3600);
+                
+                const result = d + m + s;
+                return isFinite(result) ? result : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function isValidGPS(gpsData) {
+            if (!gpsData) {
+                return false;
+            }
+
+            if (!isFinite(gpsData.latitude) || !isFinite(gpsData.longitude) || !isFinite(gpsData.altitude)) {
+                return false;
+            }
+
+            if (gpsData.latitude < CONFIG.VALID_LAT_RANGE[0] || gpsData.latitude > CONFIG.VALID_LAT_RANGE[1]) {
+                return false;
+            }
+
+            if (gpsData.longitude < CONFIG.VALID_LON_RANGE[0] || gpsData.longitude > CONFIG.VALID_LON_RANGE[1]) {
+                return false;
+            }
+
+            if (gpsData.altitude < CONFIG.VALID_ALT_RANGE[0] || gpsData.altitude > CONFIG.VALID_ALT_RANGE[1]) {
+                return false;
+            }
+
+            return true;
+        }
+
         function renderPlot(points) {
-            const lats = points.map(p => p.lat);
-            const lons = points.map(p => p.lon);
-            const alts = points.map(p => p.alt);
+            if (points.length === 0) {
+                return;
+            }
 
-            const latMin = Math.min(...lats);
-            const latMax = Math.max(...lats);
-            const lonMin = Math.min(...lons);
-            const lonMax = Math.max(...lons);
-            const altMin = Math.min(...alts);
-            const altMax = Math.max(...alts);
+            try {
+                const lats = points.map(p => p.latitude);
+                const lons = points.map(p => p.longitude);
+                const alts = points.map(p => p.altitude);
 
-            const latMargin = (latMax - latMin) * 0.1 || 0.001;
-            const lonMargin = (lonMax - lonMin) * 0.1 || 0.001;
-            const altMargin = (altMax - altMin) * 0.1 || 10;
+                const latMin = Math.min(...lats);
+                const latMax = Math.max(...lats);
+                const lonMin = Math.min(...lons);
+                const lonMax = Math.max(...lons);
+                const altMin = Math.min(...alts);
+                const altMax = Math.max(...alts);
 
-            // Flight path line
-            const trace1 = {
-                x: lons,
-                y: lats,
-                z: alts,
-                mode: 'lines',
-                type: 'scatter3d',
-                line: { color: '#32CD32', width: 4 },
-                name: 'Flight Path',
-                hoverinfo: 'skip',
-            };
+                const latMargin = Math.max((latMax - latMin) * 0.15, 0.001);
+                const lonMargin = Math.max((lonMax - lonMin) * 0.15, 0.001);
+                const altMargin = Math.max((altMax - altMin) * 0.15, 10);
 
-            // Data points
-            const hoverTexts = points.map(p => 
-                `${p.filename}<br>Lat: ${p.lat.toFixed(6)}°<br>Lon: ${p.lon.toFixed(6)}°<br>Alt: ${p.alt.toFixed(1)}m`
-            );
+                const trace1 = {
+                    x: lons,
+                    y: lats,
+                    z: alts,
+                    mode: 'lines',
+                    type: 'scatter3d',
+                    line: { color: '#32CD32', width: 4 },
+                    name: 'Flight Path',
+                };
 
-            const trace2 = {
-                x: lons,
-                y: lats,
-                z: alts,
-                mode: 'markers',
-                type: 'scatter3d',
-                marker: { size: 6, color: '#ff4136', opacity: 0.8 },
-                text: hoverTexts,
-                hovertemplate: '%{text}<extra></extra>',
-                name: 'Data Points',
-            };
+                const hover = points.map(p => 
+                    `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m`
+                );
 
-            // Ground plane
-            const xs = linspace(lonMin - lonMargin, lonMax + lonMargin, 15);
-            const ys = linspace(latMin - latMargin, latMax + latMargin, 15);
-            const [xMesh, yMesh] = meshgrid(xs, ys);
-            const zMesh = xMesh.map(row => row.map(() => altMin - altMargin));
+                const trace2 = {
+                    x: lons,
+                    y: lats,
+                    z: alts,
+                    mode: 'markers',
+                    type: 'scatter3d',
+                    marker: { size: 5, color: '#ff4136' },
+                    text: hover,
+                    hovertemplate: '%{text}<extra></extra>',
+                    name: 'GPS Points',
+                };
 
-            const trace3 = {
-                x: xMesh,
-                y: yMesh,
-                z: zMesh,
-                type: 'surface',
-                colorscale: [[0, '#003300'], [1, '#003300']],
-                showscale: false,
-                opacity: 0.7,
-                hoverinfo: 'skip',
-                name: 'Ground',
-            };
-
-            const layout = {
-                title: `Flight Path - ${points.length} Points`,
-                scene: {
-                    xaxis: {
-                        title: 'Longitude',
-                        gridcolor: '#444',
-                        range: [lonMin - lonMargin, lonMax + lonMargin],
+                const layout = {
+                    title: `Flight Path - ${points.length} Points`,
+                    scene: {
+                        xaxis: { 
+                            title: 'Longitude', 
+                            gridcolor: '#444',
+                            range: [lonMin - lonMargin, lonMax + lonMargin] 
+                        },
+                        yaxis: { 
+                            title: 'Latitude', 
+                            gridcolor: '#444',
+                            range: [latMin - latMargin, latMax + latMargin] 
+                        },
+                        zaxis: { 
+                            title: 'Altitude (m)', 
+                            gridcolor: '#444',
+                            range: [Math.max(0, altMin - altMargin), altMax + altMargin] 
+                        },
+                        bgcolor: '#0f0f1e',
                     },
-                    yaxis: {
-                        title: 'Latitude',
-                        gridcolor: '#444',
-                        range: [latMin - latMargin, latMax + latMargin],
-                    },
-                    zaxis: {
-                        title: 'Altitude (m)',
-                        gridcolor: '#444',
-                        range: [Math.max(0, altMin - altMargin), altMax + altMargin],
-                    },
-                    bgcolor: '#0f0f1e',
-                    camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } },
-                },
-                margin: { l: 0, r: 0, t: 50, b: 0 },
-                paper_bgcolor: '#0f0f1e',
-                plot_bgcolor: '#0f0f1e',
-                font: { color: '#e0e0e0' },
-                showlegend: true,
-            };
+                    margin: { l: 0, r: 0, t: 40, b: 0 },
+                    paper_bgcolor: '#0f0f1e',
+                    plot_bgcolor: '#0f0f1e',
+                    font: { color: '#e0e0e0' },
+                };
 
-            plotDiv.innerHTML = '';
-            Plotly.newPlot(plotDiv, [trace3, trace1, trace2], layout, { responsive: true });
+                DOM.plotDiv.innerHTML = '';
+                Plotly.newPlot(DOM.plotDiv, [trace1, trace2], layout, { responsive: true });
+            } catch (error) {
+                console.error('Plot error:', error);
+                showMessage('Error rendering plot', 'error');
+            }
         }
 
-        function updateMetadata(points, metadata) {
-            let html = '';
-            
-            html += `<div class="metadata-row"><span class="metadata-label">Points:</span><span class="metadata-value">${points.length}</span></div>`;
-            
-            if (metadata.latRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Latitude:</span><span class="metadata-value">${metadata.latRange[0].toFixed(4)}°</span></div>`;
-                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.latRange[metadata.latRange.length - 1].toFixed(4)}°</span></div>`;
+        function updateMetadata(results) {
+            try {
+                let html = '';
+                html += `<div class="metadata-row"><span class="metadata-label">GPS Points:</span><span class="metadata-value">${results.points.length}</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Images Processed:</span><span class="metadata-value">${results.stats.gpsFound}</span></div>`;
+                
+                if (results.stats.noGPS > 0) {
+                    html += `<div class="metadata-row"><span class="metadata-label">No GPS Data:</span><span class="metadata-value">${results.stats.noGPS}</span></div>`;
+                }
+                
+                if (results.metadata.lats.length > 0) {
+                    const latMin = Math.min(...results.metadata.lats);
+                    const latMax = Math.max(...results.metadata.lats);
+                    html += `<div class="metadata-row"><span class="metadata-label">Latitude Min:</span><span class="metadata-value">${latMin.toFixed(4)}°</span></div>`;
+                    html += `<div class="metadata-row"><span class="metadata-label">Latitude Max:</span><span class="metadata-value">${latMax.toFixed(4)}°</span></div>`;
+                }
+                
+                if (results.metadata.lons.length > 0) {
+                    const lonMin = Math.min(...results.metadata.lons);
+                    const lonMax = Math.max(...results.metadata.lons);
+                    html += `<div class="metadata-row"><span class="metadata-label">Longitude Min:</span><span class="metadata-value">${lonMin.toFixed(4)}°</span></div>`;
+                    html += `<div class="metadata-row"><span class="metadata-label">Longitude Max:</span><span class="metadata-value">${lonMax.toFixed(4)}°</span></div>`;
+                }
+                
+                if (results.metadata.alts.length > 0) {
+                    const altMin = Math.min(...results.metadata.alts);
+                    const altMax = Math.max(...results.metadata.alts);
+                    html += `<div class="metadata-row"><span class="metadata-label">Altitude Min:</span><span class="metadata-value">${altMin.toFixed(0)}m</span></div>`;
+                    html += `<div class="metadata-row"><span class="metadata-label">Altitude Max:</span><span class="metadata-value">${altMax.toFixed(0)}m</span></div>`;
+                }
+                
+                if (results.metadata.cameras.size > 0) {
+                    const cameras = Array.from(results.metadata.cameras).slice(0, 3).join(', ');
+                    html += `<div class="metadata-row"><span class="metadata-label">Camera(s):</span><span class="metadata-value">${cameras}</span></div>`;
+                }
+
+                DOM.metadataContent.innerHTML = html;
+                DOM.metadataPanel.classList.add('show');
+            } catch (error) {
+                console.error('Metadata update error:', error);
             }
-            
-            if (metadata.lonRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Longitude:</span><span class="metadata-value">${metadata.lonRange[0].toFixed(4)}°</span></div>`;
-                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.lonRange[metadata.lonRange.length - 1].toFixed(4)}°</span></div>`;
-            }
-            
-            if (metadata.altRange.length > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Altitude:</span><span class="metadata-value">${Math.min(...metadata.altRange).toFixed(0)}m</span></div>`;
-                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${Math.max(...metadata.altRange).toFixed(0)}m</span></div>`;
-            }
-            
-            if (metadata.cameras.size > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Camera(s):</span><span class="metadata-value">${Array.from(metadata.cameras).join(', ')}</span></div>`;
-            }
-            
-            metadataContent.innerHTML = html;
-            metadataPanel.classList.add('show');
         }
 
-        function showStatus(message, type) {
-            statusDiv.innerHTML = message;
-            statusDiv.className = `status show ${type}`;
+        function updateProgress(current, total) {
+            const percent = Math.round((current / total) * 100);
+            DOM.progressFill.style.width = percent + '%';
+            DOM.progressText.textContent = `${current} of ${total}`;
         }
 
-        function linspace(start, end, num) {
-            const arr = [];
-            const step = (end - start) / (num - 1);
-            for (let i = 0; i < num; i++) {
-                arr.push(start + step * i);
-            }
-            return arr;
-        }
-
-        function meshgrid(xs, ys) {
-            const xMesh = [];
-            const yMesh = [];
-            for (let j = 0; j < ys.length; j++) {
-                xMesh.push([...xs]);
-                yMesh.push(ys.map(() => ys[j]));
-            }
-            return [xMesh, yMesh];
+        function showMessage(msg, type) {
+            DOM.messageBox.innerHTML = msg;
+            DOM.messageBox.className = `message-box show ${type}`;
         }
     </script>
 </body>
