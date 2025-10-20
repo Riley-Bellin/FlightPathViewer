@@ -772,7 +772,6 @@
             let timeoutId = null;
             let imageLoadTimeoutId = null;
             let resolved = false;
-            let originalLog, originalWarn, originalError;
 
             const cleanup = () => {
                 console.log('Cleaning up resources for:', filename);
@@ -789,22 +788,9 @@
                 img = null;
             };
 
-            const restoreConsole = () => {
-                if (originalLog) {
-                    try {
-                        console.log = originalLog;
-                        console.warn = originalWarn;
-                        console.error = originalError;
-                    } catch (e) {
-                        // Console restoration failed, continue anyway
-                    }
-                }
-            };
-
             const safeResolve = (data) => {
                 if (resolved) return;
                 resolved = true;
-                restoreConsole();
                 console.log('Safe resolve for', filename, 'with data:', data ? 'GPS data extracted' : 'null');
                 cleanup();
                 resolve(data);
@@ -835,29 +821,7 @@
                     clearTimeout(imageLoadTimeoutId);
                     console.log('Image loaded for', filename, ', preparing EXIF extraction');
                     try {
-                        originalLog = console.log;
-                        originalWarn = console.warn;
-                        originalError = console.error;
-                        
-                        const exifLogs = [];
-                        
-                        console.log = function(...args) {
-                            const message = args.join(' ');
-                            exifLogs.push(message);
-                        };
-                        
-                        console.warn = function(...args) {
-                            const message = args.join(' ');
-                            exifLogs.push('WARN: ' + message);
-                        };
-                        
-                        console.error = function(...args) {
-                            const message = args.join(' ');
-                            exifLogs.push('ERROR: ' + message);
-                        };
-
                         timeoutId = setTimeout(() => {
-                            restoreConsole();
                             console.warn('EXIF extraction timeout for', filename, '- took longer than', CONFIG.EXIF_TIMEOUT, 'ms');
                             safeResolve(null);
                         }, CONFIG.EXIF_TIMEOUT);
@@ -868,7 +832,6 @@
                             EXIF.getData(img, function() {
                                 if (resolved) return;
                                 clearTimeout(timeoutId);
-                                restoreConsole();
                                 
                                 console.log('EXIF.getData callback executed for', filename);
                                 
@@ -931,18 +894,15 @@
                                         camera: camera,
                                     });
                                 } catch (tagError) {
-                                    restoreConsole();
                                     console.error('Error extracting EXIF tags for', filename, ':', tagError.message);
                                     return safeResolve(null);
                                 }
                             });
                         } catch (exifCallError) {
-                            restoreConsole();
                             console.error('EXIF.getData exception for', filename, ':', exifCallError.message);
                             return safeResolve(null);
                         }
                     } catch (outerExifError) {
-                        restoreConsole();
                         console.error('Outer EXIF processing error for', filename, ':', outerExifError.message);
                         return safeResolve(null);
                     }
@@ -965,7 +925,6 @@
                 console.log('Setting image src for', filename, ':', url);
                 img.src = url;
             } catch (error) {
-                restoreConsole();
                 console.error('GPS extraction try-catch error for', filename, ':', error.message);
                 safeResolve(null);
             }
@@ -1118,7 +1077,7 @@
                 const batch = validFiles.slice(i, i + CONFIG.BATCH_SIZE);
                 console.log('Processing batch', Math.floor(i / CONFIG.BATCH_SIZE) + 1, 'with', batch.length, 'files');
                 
-                await Promise.all(batch.map(async (file) => {
+                await Promise.allSettled(batch.map(async (file) => {
                     console.log('Processing file:', file.name);
                     try {
                         console.log('Reading file buffer for:', file.name);
@@ -1256,8 +1215,10 @@
 
             console.log('Ground Z:', groundZ, 'Z Max:', zMax);
 
+            const traces = [];
+
             if (inlierLats.length > 0 && inlierLons.length > 0 && zMax > groundZ) {
-                console.log('Creating mesh surface');
+                console.log('Creating mesh surface for ground');
                 const nx = 20, ny = 20;
                 const xs = [];
                 const ys = [];
@@ -1287,63 +1248,19 @@
 
                 const flatColor = Array(ny).fill().map(() => Array(nx).fill(0));
 
-                console.log('Calling Plotly.newPlot with surface mesh');
-                Plotly.newPlot(DOM.plotDiv, [
-                    {
-                        x: xMesh,
-                        y: yMesh,
-                        z: zMesh,
-                        surfacecolor: flatColor,
-                        colorscale: [[0, '#002200'], [1, '#002200']],
-                        showscale: false,
-                        opacity: 1.0,
-                        hoverinfo: 'skip',
-                        name: 'Ground',
-                        type: 'surface'
-                    }
-                ], {
-                    title: `Flight Path - ${results.points.length} Points`,
-                    scene: {
-                        xaxis: { 
-                            title: 'Longitude', 
-                            gridcolor: '#444',
-                            range: [lonMin - lonMargin, lonMax + lonMargin]
-                        },
-                        yaxis: { 
-                            title: 'Latitude', 
-                            gridcolor: '#444',
-                            range: [latMin - latMargin, latMax + latMargin]
-                        },
-                        zaxis: { 
-                            title: 'Altitude (m)', 
-                            gridcolor: '#444',
-                            range: [groundZ, zMax]
-                        },
-                        bgcolor: '#0f0f1e',
-                    },
-                    margin: { l: 0, r: 0, t: 40, b: 0 },
-                    paper_bgcolor: '#0f0f1e',
-                    plot_bgcolor: '#0f0f1e',
-                    font: { color: '#e0e0e0' },
-                }, { responsive: true });
-            } else {
-                console.log('Calling Plotly.newPlot without surface mesh');
-                Plotly.newPlot(DOM.plotDiv, [], {
-                    title: `Flight Path - ${results.points.length} Points`,
-                    scene: {
-                        xaxis: { title: 'Longitude', gridcolor: '#444' },
-                        yaxis: { title: 'Latitude', gridcolor: '#444' },
-                        zaxis: { title: 'Altitude (m)', gridcolor: '#444' },
-                        bgcolor: '#0f0f1e',
-                    },
-                    margin: { l: 0, r: 0, t: 40, b: 0 },
-                    paper_bgcolor: '#0f0f1e',
-                    plot_bgcolor: '#0f0f1e',
-                    font: { color: '#e0e0e0' },
-                }, { responsive: true });
+                traces.push({
+                    x: xMesh,
+                    y: yMesh,
+                    z: zMesh,
+                    surfacecolor: flatColor,
+                    colorscale: [[0, '#002200'], [1, '#002200']],
+                    showscale: false,
+                    opacity: 1.0,
+                    hoverinfo: 'skip',
+                    name: 'Ground',
+                    type: 'surface'
+                });
             }
-
-            const traces = [];
 
             if (results.inliers.length > 0) {
                 console.log('Creating inlier trace');
@@ -1392,10 +1309,32 @@
                 });
             }
 
-            if (traces.length > 0) {
-                console.log('Adding', traces.length, 'traces to plot');
-                Plotly.addTraces(DOM.plotDiv, traces);
-            }
+            console.log('Calling Plotly.newPlot with', traces.length, 'traces');
+            Plotly.newPlot(DOM.plotDiv, traces, {
+                title: `Flight Path - ${results.points.length} Points`,
+                scene: {
+                    xaxis: { 
+                        title: 'Longitude', 
+                        gridcolor: '#444',
+                        range: [lonMin - lonMargin, lonMax + lonMargin]
+                    },
+                    yaxis: { 
+                        title: 'Latitude', 
+                        gridcolor: '#444',
+                        range: [latMin - latMargin, latMax + latMargin]
+                    },
+                    zaxis: { 
+                        title: 'Altitude (m)', 
+                        gridcolor: '#444',
+                        range: [groundZ, zMax]
+                    },
+                    bgcolor: '#0f0f1e',
+                },
+                margin: { l: 0, r: 0, t: 40, b: 0 },
+                paper_bgcolor: '#0f0f1e',
+                plot_bgcolor: '#0f0f1e',
+                font: { color: '#e0e0e0' },
+            }, { responsive: true });
             
             console.log('Plot rendering complete');
         } catch (error) {
