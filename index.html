@@ -252,104 +252,6 @@
             word-break: break-word;
             font-weight: 600;
         }
-
-        .console-panel {
-            background: #0a0a14;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 0;
-            font-size: 10px;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            max-height: 200px;
-        }
-
-        .console-header {
-            background: #1a1a2e;
-            padding: 8px 12px;
-            border-bottom: 1px solid #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .console-header:hover {
-            background: #222;
-        }
-
-        .console-title {
-            color: #32CD32;
-            font-weight: 600;
-            font-size: 11px;
-        }
-
-        .console-controls {
-            display: flex;
-            gap: 8px;
-        }
-
-        .console-btn {
-            background: #333;
-            border: none;
-            color: #888;
-            padding: 3px 8px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 10px;
-            transition: all 0.2s ease;
-        }
-
-        .console-btn:hover {
-            background: #444;
-            color: #e0e0e0;
-        }
-
-        .console-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px 12px;
-            background: #0a0a14;
-            max-height: 160px;
-        }
-
-        .console-line {
-            margin: 2px 0;
-            line-height: 1.4;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
-
-        .console-line.log {
-            color: #99ccff;
-        }
-
-        .console-line.warn {
-            color: #ffff99;
-        }
-
-        .console-line.error {
-            color: #ff9999;
-        }
-
-        .console-line.success {
-            color: #90ee90;
-        }
-
-        .console-line.timestamp {
-            color: #666;
-            font-size: 9px;
-        }
-
-        .console-empty {
-            color: #555;
-            font-style: italic;
-            padding: 20px 0;
-            text-align: center;
-        }
         
         .footer {
             font-size: 10px;
@@ -423,19 +325,6 @@
                 <h3>Flight Data Summary</h3>
                 <div id="metadataContent"></div>
             </div>
-
-            <div class="console-panel" id="consolePanel">
-                <div class="console-header" id="consoleHeader">
-                    <span class="console-title">🖥️ Console</span>
-                    <div class="console-controls">
-                        <button class="console-btn" id="consoleClear" title="Clear console">Clear</button>
-                        <button class="console-btn" id="consoleToggle" title="Toggle">▼</button>
-                    </div>
-                </div>
-                <div class="console-content" id="consoleContent">
-                    <div class="console-empty">Ready</div>
-                </div>
-            </div>
             
             <div class="footer">
                 <p>Data stays on your device</p>
@@ -447,151 +336,16 @@
     </div>
 
 <script>
-    class ErrorConsole {
-        constructor(contentElement, maxLines = 100) {
-            this.contentElement = contentElement;
-            this.maxLines = maxLines;
-            this.logs = [];
-            this.isExpanded = true;
-            this.init();
-        }
-
-        init() {
-            this.setupConsoleInterception();
-            this.setupControls();
-        }
-
-        setupConsoleInterception() {
-            const originalLog = console.log;
-            const originalWarn = console.warn;
-            const originalError = console.error;
-
-            console.log = (...args) => {
-                originalLog(...args);
-                this.addLog('log', args);
-            };
-
-            console.warn = (...args) => {
-                originalWarn(...args);
-                this.addLog('warn', args);
-            };
-
-            console.error = (...args) => {
-                originalError(...args);
-                this.addLog('error', args);
-            };
-
-            window.addEventListener('error', (event) => {
-                console.log('UNCAUGHT ERROR:', event.message, 'at', event.filename, 'line', event.lineno);
-                this.addLog('error', [`UNCAUGHT ERROR: ${event.message} at ${event.filename}:${event.lineno}`]);
-            });
-
-            window.addEventListener('unhandledrejection', (event) => {
-                console.log('UNHANDLED PROMISE REJECTION:', event.reason);
-                this.addLog('error', [`UNHANDLED PROMISE REJECTION: ${event.reason}`]);
-            });
-        }
-
-        setupControls() {
-            const clearBtn = document.getElementById('consoleClear');
-            const toggleBtn = document.getElementById('consoleToggle');
-            const header = document.getElementById('consoleHeader');
-
-            clearBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.clear();
-            });
-
-            toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggle();
-            });
-
-            header.addEventListener('click', () => {
-                this.toggle();
-            });
-        }
-
-        addLog(type, args) {
-            const timestamp = new Date().toLocaleTimeString();
-            const message = args.map(arg => {
-                if (typeof arg === 'object') {
-                    try {
-                        return JSON.stringify(arg);
-                    } catch (e) {
-                        return String(arg);
-                    }
-                }
-                return String(arg);
-            }).join(' ');
-
-            this.logs.push({ type, message, timestamp });
-
-            if (this.logs.length > this.maxLines) {
-                this.logs.shift();
-            }
-
-            this.render();
-        }
-
-        render() {
-            if (this.logs.length === 0) {
-                this.contentElement.innerHTML = '<div class="console-empty">Ready</div>';
-                return;
-            }
-
-            this.contentElement.innerHTML = this.logs.map(log => 
-                `<div class="console-line ${log.type}">
-                    <span class="console-line timestamp">[${log.timestamp}]</span> ${this.escapeHtml(log.message)}
-                </div>`
-            ).join('');
-
-            this.contentElement.scrollTop = this.contentElement.scrollHeight;
-        }
-
-        clear() {
-            this.logs = [];
-            this.render();
-        }
-
-        toggle() {
-            this.isExpanded = !this.isExpanded;
-            const content = document.getElementById('consoleContent');
-            const toggleBtn = document.getElementById('consoleToggle');
-            
-            if (this.isExpanded) {
-                content.style.display = 'block';
-                toggleBtn.textContent = '▼';
-            } else {
-                content.style.display = 'none';
-                toggleBtn.textContent = '▶';
-            }
-        }
-
-        escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-    }
-
-    const errorConsole = new ErrorConsole(document.getElementById('consoleContent'));
-
     const CONFIG = {
         MAX_FILES: 10000,
         VALID_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/bmp'],
-        BATCH_SIZE: 5,
+        BATCH_SIZE: 50,
+        EXIF_TIMEOUT: 2000,
+        IMAGE_LOAD_TIMEOUT: 3000,
+        MAX_FOLDERS_TO_RENDER: 50,
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
         VALID_ALT_RANGE: [-500, 50000],
-        EXIF_TIMEOUT: 8000,
-        IMAGE_LOAD_TIMEOUT: 5000,
-        MAX_FOLDERS_TO_RENDER: 50,
     };
 
     const state = {
@@ -625,24 +379,19 @@
 
     DOM.uploadArea.addEventListener('dragenter', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         DOM.uploadArea.classList.add('drag-over');
     });
 
     DOM.uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
-        e.stopPropagation();
     });
 
     DOM.uploadArea.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
         DOM.uploadArea.classList.remove('drag-over');
     });
 
     DOM.uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         DOM.uploadArea.classList.remove('drag-over');
         
         if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
@@ -658,116 +407,68 @@
         }
     });
 
-    DOM.uploadArea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            DOM.fileInput.click();
-        }
-    });
-
-    document.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    });
-
-    document.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    });
+    function isImageFile(file) {
+        const isValidType = CONFIG.VALID_IMAGE_TYPES.includes(file.type);
+        const isValidExtension = /\.(jpg|jpeg|png|tiff|tif|webp|bmp)$/i.test(file.name);
+        return isValidType || isValidExtension;
+    }
 
     async function handleDroppedFiles(files) {
-        console.log('handleDroppedFiles called with', files.length, 'files');
         try {
             const imageFiles = files.filter(f => isImageFile(f));
-            console.log('Filtered to', imageFiles.length, 'image files');
             if (imageFiles.length === 0) {
                 showMessage('No image files found. Supported: JPG, PNG, TIFF, WebP, BMP', 'error');
                 return;
             }
             processFolderFiles(imageFiles);
         } catch (error) {
-            console.error('handleDroppedFiles error:', error.message, error.stack);
             showMessage('Error processing dropped files: ' + error.message, 'error');
         }
     }
 
-    function isImageFile(file) {
-        console.log('Checking file:', file.name, 'type:', file.type);
-        const isValidType = CONFIG.VALID_IMAGE_TYPES.includes(file.type);
-        const isValidExtension = /\.(jpg|jpeg|png|tiff|tif|webp|bmp)$/i.test(file.name);
-        console.log('File validation - valid type:', isValidType, 'valid extension:', isValidExtension);
-        return isValidType || isValidExtension;
-    }
-
     function convertDMS(dmsInput) {
-        console.log('convertDMS called with input:', JSON.stringify(dmsInput));
         try {
             let d, m, s;
 
             if (typeof dmsInput === 'string') {
-                console.log('DMS input is string');
                 const parts = dmsInput.split(',');
-                if (parts.length < 3) {
-                    console.log('String DMS has insufficient parts:', parts.length);
-                    return null;
-                }
+                if (parts.length < 3) return null;
                 d = parseFloat(parts[0]);
                 m = parseFloat(parts[1]);
                 s = parseFloat(parts[2]);
             } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
-                console.log('DMS input is array, length:', dmsInput.length);
-
-                let isObjectArray = false;
                 if (dmsInput[0] && typeof dmsInput[0] === 'object' && !Array.isArray(dmsInput[0])) {
-                    console.log('Detected object array format - checking for numerator/denominator');
                     if (dmsInput[0].hasOwnProperty('numerator') && dmsInput[0].hasOwnProperty('denominator')) {
-                        isObjectArray = true;
+                        d = dmsInput[0].numerator / dmsInput[0].denominator;
+                        m = dmsInput[1].numerator / dmsInput[1].denominator;
+                        s = dmsInput[2].numerator / dmsInput[2].denominator;
+                    } else {
+                        return null;
                     }
-                }
-
-                if (isObjectArray) {
-                    console.log('DMS format: object array with numerator/denominator');
-                    d = dmsInput[0].numerator / dmsInput[0].denominator;
-                    m = dmsInput[1].numerator / dmsInput[1].denominator;
-                    s = dmsInput[2].numerator / dmsInput[2].denominator;
-                    console.log('Extracted from fraction objects - d:', d, 'm:', m, 's:', s);
-                } else if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
-                    console.log('DMS format: simple array of numbers');
-                    d = dmsInput[0];
-                    m = dmsInput[1];
-                    s = dmsInput[2];
                 } else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
-                    console.log('DMS format: array of fraction pairs');
                     d = dmsInput[0][0] / dmsInput[0][1];
                     m = dmsInput[1][0] / dmsInput[1][1];
                     s = dmsInput[2][0] / dmsInput[2][1];
+                } else if (typeof dmsInput[0] === 'number') {
+                    d = dmsInput[0];
+                    m = dmsInput[1];
+                    s = dmsInput[2];
                 } else {
-                    console.log('DMS format: unrecognized format');
                     return null;
                 }
             } else {
-                console.log('DMS input is invalid format');
                 return null;
             }
 
-            console.log('DMS components - d:', d, 'm:', m, 's:', s);
-
-            if (!isFinite(d) || !isFinite(m) || !isFinite(s)) {
-                console.log('DMS values not finite');
-                return null;
-            }
-
+            if (!isFinite(d) || !isFinite(m) || !isFinite(s)) return null;
             const result = d + (m / 60) + (s / 3600);
-            console.log('DMS conversion: d + (m/60) + (s/3600) =', d, '+ (', m, '/60) + (', s, '/3600) =', result);
             return isFinite(result) ? result : null;
         } catch (e) {
-            console.error('convertDMS error:', e.message, e.stack);
             return null;
         }
     }
 
     function extractGPS(buffer, filename) {
-        console.log('extractGPS called for file:', filename, 'buffer size:', buffer ? buffer.byteLength : 'null');
         return new Promise((resolve) => {
             let url = null;
             let img = null;
@@ -776,16 +477,12 @@
             let resolved = false;
 
             const cleanup = () => {
-                console.log('Cleaning up resources for:', filename);
                 if (timeoutId) clearTimeout(timeoutId);
                 if (imageLoadTimeoutId) clearTimeout(imageLoadTimeoutId);
                 if (url) {
                     try {
                         URL.revokeObjectURL(url);
-                        console.log('Object URL revoked for:', filename);
-                    } catch (cleanupError) {
-                        console.error('Error revoking object URL for', filename, ':', cleanupError.message);
-                    }
+                    } catch (e) {}
                 }
                 img = null;
             };
@@ -793,186 +490,135 @@
             const safeResolve = (data) => {
                 if (resolved) return;
                 resolved = true;
-                console.log('Safe resolve for', filename, 'with data:', data ? 'GPS data extracted' : 'null');
                 cleanup();
                 resolve(data);
             };
 
             try {
                 if (!buffer || buffer.byteLength === 0) {
-                    console.log('Skipping', filename, ': empty buffer');
                     return safeResolve(null);
                 }
 
-                console.log('Creating blob for', filename);
                 const blob = new Blob([buffer], { type: 'image/jpeg' });
                 url = URL.createObjectURL(blob);
-                console.log('Object URL created for', filename, ':', url);
                 
                 img = new Image();
                 img.crossOrigin = "anonymous";
-                console.log('Image object created for', filename);
                 
                 imageLoadTimeoutId = setTimeout(() => {
-                    console.warn('Image load timeout for', filename, '- took longer than', CONFIG.IMAGE_LOAD_TIMEOUT, 'ms');
                     safeResolve(null);
                 }, CONFIG.IMAGE_LOAD_TIMEOUT);
                 
                 img.onload = function() {
                     if (resolved) return;
                     clearTimeout(imageLoadTimeoutId);
-                    console.log('Image loaded for', filename, ', preparing EXIF extraction');
+                    
+                    timeoutId = setTimeout(() => {
+                        safeResolve(null);
+                    }, CONFIG.EXIF_TIMEOUT);
+
                     try {
-                        timeoutId = setTimeout(() => {
-                            console.warn('EXIF extraction timeout for', filename, '- took longer than', CONFIG.EXIF_TIMEOUT, 'ms');
-                            safeResolve(null);
-                        }, CONFIG.EXIF_TIMEOUT);
-
-                        try {
-                            console.log('Calling EXIF.getData for', filename);
+                        EXIF.getData(img, function() {
+                            if (resolved) return;
+                            clearTimeout(timeoutId);
                             
-                            EXIF.getData(img, function() {
-                                if (resolved) return;
-                                clearTimeout(timeoutId);
-                                
-                                console.log('EXIF.getData callback executed for', filename);
-                                
-                                try {
-                                    const lat = EXIF.getTag(this, 'GPSLatitude');
-                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
-                                    const lon = EXIF.getTag(this, 'GPSLongitude');
-                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
-                                    const alt = EXIF.getTag(this, 'GPSAltitude');
+                            try {
+                                const lat = EXIF.getTag(this, 'GPSLatitude');
+                                const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                const lon = EXIF.getTag(this, 'GPSLongitude');
+                                const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                const alt = EXIF.getTag(this, 'GPSAltitude');
 
-                                    console.log('EXIF tags retrieved for', filename, '- lat:', lat ? 'present' : 'missing', 'latRef:', latRef, 'lon:', lon ? 'present' : 'missing', 'lonRef:', lonRef);
-
-                                    if (!lat || !latRef || !lon || !lonRef) {
-                                        console.log('Missing required GPS tags for', filename);
-                                        return safeResolve(null);
-                                    }
-
-                                    const latitude = convertDMS(lat);
-                                    const longitude = convertDMS(lon);
-
-                                    console.log('DMS conversion result for', filename, '- latitude:', latitude, 'longitude:', longitude);
-
-                                    if (latitude === null || longitude === null) {
-                                        console.log('DMS conversion failed for', filename);
-                                        return safeResolve(null);
-                                    }
-
-                                    const finalLat = latRef === 'S' ? -latitude : latitude;
-                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
-                                    
-                                    console.log('Calculated final coordinates for', filename, '- finalLat:', finalLat, 'finalLon:', finalLon);
-
-                                    let altitude = 0;
-                                    if (alt) {
-                                        if (alt.numerator !== undefined && alt.denominator !== undefined) {
-                                            altitude = alt.numerator / alt.denominator;
-                                        } else if (typeof alt === 'number') {
-                                            altitude = alt;
-                                        }
-                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
-                                        console.log('Altitude extracted for', filename, ':', altitude);
-                                    } else {
-                                        console.log('No altitude data for', filename);
-                                    }
-
-                                    let camera = null;
-                                    const make = EXIF.getTag(this, 'Make');
-                                    const model = EXIF.getTag(this, 'Model');
-                                    if (make || model) {
-                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
-                                        console.log('Camera info for', filename, ':', camera);
-                                    }
-
-                                    console.log('SUCCESS: GPS extracted for', filename, '- Lat:', finalLat, 'Lon:', finalLon, 'Alt:', altitude);
-                                    safeResolve({
-                                        latitude: finalLat,
-                                        longitude: finalLon,
-                                        altitude: altitude,
-                                        filename: filename,
-                                        camera: camera,
-                                    });
-                                } catch (tagError) {
-                                    console.error('Error extracting EXIF tags for', filename, ':', tagError.message);
+                                if (!lat || !latRef || !lon || !lonRef) {
                                     return safeResolve(null);
                                 }
-                            });
-                        } catch (exifCallError) {
-                            console.error('EXIF.getData exception for', filename, ':', exifCallError.message);
-                            return safeResolve(null);
-                        }
-                    } catch (outerExifError) {
-                        console.error('Outer EXIF processing error for', filename, ':', outerExifError.message);
+
+                                const latitude = convertDMS(lat);
+                                const longitude = convertDMS(lon);
+
+                                if (latitude === null || longitude === null) {
+                                    return safeResolve(null);
+                                }
+
+                                const finalLat = latRef === 'S' ? -latitude : latitude;
+                                const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                
+                                let altitude = 0;
+                                if (alt) {
+                                    if (alt.numerator !== undefined && alt.denominator !== undefined) {
+                                        altitude = alt.numerator / alt.denominator;
+                                    } else if (typeof alt === 'number') {
+                                        altitude = alt;
+                                    }
+                                    altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                }
+
+                                let camera = null;
+                                const make = EXIF.getTag(this, 'Make');
+                                const model = EXIF.getTag(this, 'Model');
+                                if (make || model) {
+                                    camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                }
+
+                                safeResolve({
+                                    latitude: finalLat,
+                                    longitude: finalLon,
+                                    altitude: altitude,
+                                    filename: filename,
+                                    camera: camera,
+                                });
+                            } catch (tagError) {
+                                return safeResolve(null);
+                            }
+                        });
+                    } catch (exifCallError) {
                         return safeResolve(null);
                     }
                 };
                 
-                img.onerror = function(err) {
+                img.onerror = function() {
                     if (resolved) return;
                     clearTimeout(imageLoadTimeoutId);
-                    console.warn('Image load error for', filename, ':', err);
                     safeResolve(null);
                 };
 
                 img.onabort = function() {
                     if (resolved) return;
                     clearTimeout(imageLoadTimeoutId);
-                    console.warn('Image load aborted for', filename);
                     safeResolve(null);
                 };
                 
-                console.log('Setting image src for', filename, ':', url);
                 img.src = url;
             } catch (error) {
-                console.error('GPS extraction try-catch error for', filename, ':', error.message);
                 safeResolve(null);
             }
         });
     }
 
     function isValidGPS(gpsData) {
-        console.log('isValidGPS called for:', gpsData ? gpsData.filename : 'null');
-        try {
-            if (!gpsData) {
-                console.log('GPS data is null or undefined');
-                return false;
-            }
+        if (!gpsData) return false;
 
-            if (!isFinite(gpsData.latitude) || !isFinite(gpsData.longitude) || !isFinite(gpsData.altitude)) {
-                console.log('GPS values not finite for', gpsData.filename, '- lat:', gpsData.latitude, 'lon:', gpsData.longitude, 'alt:', gpsData.altitude);
-                return false;
-            }
-
-            if (gpsData.latitude < CONFIG.VALID_LAT_RANGE[0] || gpsData.latitude > CONFIG.VALID_LAT_RANGE[1]) {
-                console.log('Latitude out of range for', gpsData.filename, ':', gpsData.latitude);
-                return false;
-            }
-
-            if (gpsData.longitude < CONFIG.VALID_LON_RANGE[0] || gpsData.longitude > CONFIG.VALID_LON_RANGE[1]) {
-                console.log('Longitude out of range for', gpsData.filename, ':', gpsData.longitude);
-                return false;
-            }
-
-            if (gpsData.altitude < CONFIG.VALID_ALT_RANGE[0] || gpsData.altitude > CONFIG.VALID_ALT_RANGE[1]) {
-                console.log('Altitude out of range for', gpsData.filename, ':', gpsData.altitude);
-                return false;
-            }
-
-            console.log('GPS validation passed for', gpsData.filename);
-            return true;
-        } catch (error) {
-            console.error('isValidGPS error:', error.message);
+        if (!isFinite(gpsData.latitude) || !isFinite(gpsData.longitude) || !isFinite(gpsData.altitude)) {
             return false;
         }
+
+        if (gpsData.latitude < CONFIG.VALID_LAT_RANGE[0] || gpsData.latitude > CONFIG.VALID_LAT_RANGE[1]) {
+            return false;
+        }
+
+        if (gpsData.longitude < CONFIG.VALID_LON_RANGE[0] || gpsData.longitude > CONFIG.VALID_LON_RANGE[1]) {
+            return false;
+        }
+
+        if (gpsData.altitude < CONFIG.VALID_ALT_RANGE[0] || gpsData.altitude > CONFIG.VALID_ALT_RANGE[1]) {
+            return false;
+        }
+
+        return true;
     }
 
     async function processFolderFiles(files) {
-        console.log('processFolderFiles called with', files.length, 'files');
         if (state.isProcessing) {
-            console.warn('Already processing, ignoring new request');
             showMessage('Already processing. Please wait.', 'warning');
             return;
         }
@@ -982,13 +628,10 @@
         
         showMessage(`<span class="spinner"></span>Processing ${files.length} file(s)...`, 'info');
         DOM.progressContainer.classList.add('show');
-        console.log('Processing started');
 
         const validFiles = files.filter(f => isImageFile(f));
-        console.log('Filtered to', validFiles.length, 'valid image files');
         
         if (validFiles.length === 0) {
-            console.error('No valid image files found');
             showMessage('No valid image files found', 'error');
             state.isProcessing = false;
             DOM.selectBtn.disabled = false;
@@ -1014,89 +657,67 @@
         };
 
         try {
-            console.log('Starting batch processing with batch size:', CONFIG.BATCH_SIZE);
+            let lastProgressUpdate = 0;
+            
             for (let i = 0; i < validFiles.length; i += CONFIG.BATCH_SIZE) {
                 const batch = validFiles.slice(i, i + CONFIG.BATCH_SIZE);
-                console.log('Processing batch', Math.floor(i / CONFIG.BATCH_SIZE) + 1, 'with', batch.length, 'files');
                 
                 await Promise.allSettled(batch.map(async (file) => {
-                    console.log('Processing file:', file.name);
                     try {
-                        console.log('Reading file buffer for:', file.name);
                         const buffer = await file.arrayBuffer();
-                        console.log('Buffer read for', file.name, ', size:', buffer.byteLength);
-                        
                         const gpsData = await extractGPS(buffer, file.name);
-                        console.log('GPS extraction completed for', file.name, ':', gpsData ? 'data found' : 'no data');
                         
-                        if (gpsData) {
-                            console.log('GPS data received, validating for', file.name);
-                            if (isValidGPS(gpsData)) {
-                                console.log('GPS data valid for', file.name, ', adding to results');
-                                results.points.push(gpsData);
-                                results.metadata.lats.push(gpsData.latitude);
-                                results.metadata.lons.push(gpsData.longitude);
-                                results.metadata.alts.push(gpsData.altitude);
-                                results.stats.gpsFound++;
-                                
-                                if (gpsData.camera) {
-                                    results.metadata.cameras.add(gpsData.camera);
-                                    console.log('Camera added:', gpsData.camera);
-                                }
-
-                                const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
-                                if (!results.folderMap[folder]) {
-                                    results.folderMap[folder] = [];
-                                }
-                                results.folderMap[folder].push(gpsData);
-                                console.log('File added to folder map:', folder);
-                            } else {
-                                console.warn('GPS data invalid for', file.name);
-                                results.stats.failed++;
+                        if (gpsData && isValidGPS(gpsData)) {
+                            results.points.push(gpsData);
+                            results.metadata.lats.push(gpsData.latitude);
+                            results.metadata.lons.push(gpsData.longitude);
+                            results.metadata.alts.push(gpsData.altitude);
+                            results.stats.gpsFound++;
+                            
+                            if (gpsData.camera) {
+                                results.metadata.cameras.add(gpsData.camera);
                             }
+
+                            const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
+                            if (!results.folderMap[folder]) {
+                                results.folderMap[folder] = [];
+                            }
+                            results.folderMap[folder].push(gpsData);
+                        } else if (gpsData) {
+                            results.stats.failed++;
                         } else {
-                            console.log('No GPS data for', file.name);
                             results.stats.noGPS++;
                         }
                     } catch (err) {
-                        console.error('File processing error for', file.name, ':', err.message);
                         results.stats.failed++;
                     }
                     
                     results.stats.processed++;
-                    console.log('Progress:', results.stats.processed, '/', validFiles.length);
-                    updateProgress(results.stats.processed, validFiles.length);
+                    
+                    const now = Date.now();
+                    if (now - lastProgressUpdate > 100) {
+                        updateProgress(results.stats.processed, validFiles.length);
+                        lastProgressUpdate = now;
+                    }
                 }));
             }
 
-            console.log('All batches completed');
-            console.log('Results summary - processed:', results.stats.processed, 'gpsFound:', results.stats.gpsFound, 'noGPS:', results.stats.noGPS, 'failed:', results.stats.failed);
-
             if (results.points.length === 0) {
-                console.error('No GPS points extracted');
                 const message = results.stats.noGPS > 0 
                     ? `No GPS data found in any of the ${validFiles.length} image(s).`
                     : 'Could not extract GPS data from files.';
                 showMessage(message, 'error');
             } else {
-                console.log('Sorting', results.points.length, 'points by filename');
                 results.points.sort((a, b) => a.filename.localeCompare(b.filename));
-                
-                console.log('Rendering plot');
                 renderPlot(results);
-                
-                console.log('Updating metadata');
                 updateMetadata(results);
                 
                 const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
                 showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}`, 'success');
-                console.log('Processing complete successfully');
             }
         } catch (error) {
-            console.error('Processing error (outer catch):', error.message);
             showMessage('Error during processing: ' + error.message, 'error');
         } finally {
-            console.log('Processing cleanup');
             state.isProcessing = false;
             DOM.selectBtn.disabled = false;
             DOM.progressContainer.classList.remove('show');
@@ -1104,43 +725,24 @@
     }
 
     function generateFolderColor(folderIndex, totalFolders) {
-        console.log('generateFolderColor called with index:', folderIndex, 'total:', totalFolders);
-        
         const colorPalette = [
-            'rgb(255, 107, 107)',
-            'rgb(255, 159, 64)',
-            'rgb(255, 206, 86)',
-            'rgb(75, 192, 192)',
-            'rgb(54, 162, 235)',
-            'rgb(153, 102, 255)',
-            'rgb(255, 99, 132)',
-            'rgb(201, 203, 207)',
-            'rgb(139, 255, 139)',
-            'rgb(255, 159, 159)',
-            'rgb(255, 190, 122)',
-            'rgb(255, 228, 122)',
-            'rgb(122, 222, 222)',
-            'rgb(122, 191, 255)',
-            'rgb(191, 151, 255)',
+            'rgb(255, 107, 107)', 'rgb(255, 159, 64)', 'rgb(255, 206, 86)',
+            'rgb(75, 192, 192)', 'rgb(54, 162, 235)', 'rgb(153, 102, 255)',
+            'rgb(255, 99, 132)', 'rgb(201, 203, 207)', 'rgb(139, 255, 139)',
+            'rgb(255, 159, 159)', 'rgb(255, 190, 122)', 'rgb(255, 228, 122)',
+            'rgb(122, 222, 222)', 'rgb(122, 191, 255)', 'rgb(191, 151, 255)',
         ];
 
-        const index = folderIndex % colorPalette.length;
-        const color = colorPalette[index];
-        console.log('Assigned color:', color);
-        return color;
+        return colorPalette[folderIndex % colorPalette.length];
     }
 
     function renderPlot(results) {
-        console.log('renderPlot called with', results.points.length, 'total points');
-        
         if (results.points.length === 0) {
-            console.error('No data to render');
             showMessage('No data to render', 'error');
             return;
         }
 
         if (typeof Plotly === 'undefined') {
-            console.error('Plotly library not loaded');
             showMessage('Plotly library failed to load. Please refresh the page.', 'error');
             return;
         }
@@ -1152,12 +754,6 @@
             const inlierLons = results.points.map(p => p.longitude);
             const inlierAlts = results.points.map(p => p.altitude);
 
-            if (inlierLats.length === 0) {
-                console.error('No coordinate data available');
-                showMessage('No coordinate data available', 'error');
-                return;
-            }
-
             const latMin = Math.min(...inlierLats);
             const latMax = Math.max(...inlierLats);
             const lonMin = Math.min(...inlierLons);
@@ -1165,26 +761,16 @@
             const altMin = Math.min(...inlierAlts);
             const altMax = Math.max(...inlierAlts);
 
-            console.log('Data bounds - Lat:', latMin.toFixed(4), 'to', latMax.toFixed(4), 'Lon:', lonMin.toFixed(4), 'to', lonMax.toFixed(4), 'Alt:', altMin.toFixed(1), 'to', altMax.toFixed(1));
-
             const latMargin = Math.max((latMax - latMin) * 0.25, 0.001);
             const lonMargin = Math.max((lonMax - lonMin) * 0.25, 0.001);
             const altMargin = Math.max((altMax - altMin) * 0.25, 20);
-
-            console.log('Calculated margins - Lat:', latMargin.toFixed(6), 'Lon:', lonMargin.toFixed(6), 'Alt:', altMargin.toFixed(1));
-
             const zMax = altMax + altMargin;
-
-            console.log('Plot axis ranges set');
 
             const folders = Object.keys(results.folderMap)
                 .filter(f => !f.toLowerCase().includes('civil') && !f.toLowerCase().includes('road'))
                 .sort();
 
-            console.log('Processing', folders.length, 'folders for rendering');
-
             if (folders.length > CONFIG.MAX_FOLDERS_TO_RENDER) {
-                console.warn('Too many folders:', folders.length, 'limiting to', CONFIG.MAX_FOLDERS_TO_RENDER);
                 showMessage(`Note: Only showing first ${CONFIG.MAX_FOLDERS_TO_RENDER} folders out of ${folders.length}. Consider splitting your data.`, 'warning');
                 folders.splice(CONFIG.MAX_FOLDERS_TO_RENDER);
             }
@@ -1192,12 +778,7 @@
             folders.forEach((folderName, idx) => {
                 const folderPoints = results.folderMap[folderName] || [];
                 
-                if (!folderPoints || folderPoints.length === 0) {
-                    console.log('Skipping empty folder:', folderName);
-                    return;
-                }
-
-                console.log('Creating trace for folder:', folderName, 'with', folderPoints.length, 'points');
+                if (!folderPoints || folderPoints.length === 0) return;
 
                 const folderColor = generateFolderColor(idx, folders.length);
 
@@ -1214,51 +795,33 @@
                            `Altitude: ${p.altitude.toFixed(1)} m`;
                 });
 
-                const trace = {
+                traces.push({
                     x: lons,
                     y: lats,
                     z: alts,
                     mode: 'lines+markers',
                     type: 'scatter3d',
                     name: folderName,
-                    line: {
-                        color: folderColor,
-                        width: 4
-                    },
-                    marker: {
-                        size: 5,
-                        color: folderColor,
-                        opacity: 0.85
-                    },
+                    line: { color: folderColor, width: 4 },
+                    marker: { size: 5, color: folderColor, opacity: 0.85 },
                     text: labels,
                     hovertemplate: '%{text}<extra></extra>',
                     legendgroup: folderName,
                     showlegend: true
-                };
-
-                traces.push(trace);
+                });
             });
-
-            console.log('Total traces created:', traces.length);
 
             const layout = {
                 title: {
                     text: `Flight Path Visualization - ${results.points.length} GPS Points`,
-                    font: {
-                        size: 18,
-                        color: '#32CD32',
-                        family: 'Arial, sans-serif'
-                    },
+                    font: { size: 18, color: '#32CD32', family: 'Arial, sans-serif' },
                     x: 0.5,
                     xanchor: 'center'
                 },
                 scene: {
                     xaxis: {
                         title: 'Longitude',
-                        titlefont: {
-                            size: 12,
-                            color: '#32CD32'
-                        },
+                        titlefont: { size: 12, color: '#32CD32' },
                         gridcolor: '#444',
                         showbackground: true,
                         backgroundcolor: 'rgba(15, 15, 30, 0.9)',
@@ -1266,10 +829,7 @@
                     },
                     yaxis: {
                         title: 'Latitude',
-                        titlefont: {
-                            size: 12,
-                            color: '#32CD32'
-                        },
+                        titlefont: { size: 12, color: '#32CD32' },
                         gridcolor: '#444',
                         showbackground: true,
                         backgroundcolor: 'rgba(15, 15, 30, 0.9)',
@@ -1277,61 +837,30 @@
                     },
                     zaxis: {
                         title: 'Altitude (meters)',
-                        titlefont: {
-                            size: 12,
-                            color: '#32CD32'
-                        },
+                        titlefont: { size: 12, color: '#32CD32' },
                         gridcolor: '#444',
                         showbackground: true,
                         backgroundcolor: 'rgba(15, 15, 30, 0.9)',
                         range: [0, zMax]
                     },
                     bgcolor: 'rgba(15, 15, 30, 0.95)',
-                    camera: {
-                        eye: {
-                            x: 1.5,
-                            y: 1.5,
-                            z: 1.3
-                        },
-                        center: {
-                            x: 0,
-                            y: 0,
-                            z: 0
-                        }
-                    },
-                    aspectratio: {
-                        x: 1,
-                        y: 1,
-                        z: 0.7
-                    }
+                    camera: { eye: { x: 1.5, y: 1.5, z: 1.3 }, center: { x: 0, y: 0, z: 0 } },
+                    aspectratio: { x: 1, y: 1, z: 0.7 }
                 },
                 showlegend: true,
                 legend: {
-                    x: 0.01,
-                    y: 0.99,
+                    x: 0.01, y: 0.99,
                     bgcolor: 'rgba(0, 0, 0, 0.8)',
                     bordercolor: '#32CD32',
                     borderwidth: 1,
-                    font: {
-                        size: 11,
-                        color: '#e0e0e0'
-                    },
+                    font: { size: 11, color: '#e0e0e0' },
                     xanchor: 'left',
                     yanchor: 'top'
                 },
-                margin: {
-                    l: 0,
-                    r: 0,
-                    t: 60,
-                    b: 0
-                },
+                margin: { l: 0, r: 0, t: 60, b: 0 },
                 paper_bgcolor: '#0f0f1e',
                 plot_bgcolor: '#0f0f1e',
-                font: {
-                    color: '#e0e0e0',
-                    family: 'Arial, sans-serif',
-                    size: 12
-                },
+                font: { color: '#e0e0e0', family: 'Arial, sans-serif', size: 12 },
                 autosize: true,
                 responsive: true,
                 hovermode: 'closest'
@@ -1351,18 +880,14 @@
                 }
             };
 
-            console.log('Calling Plotly.newPlot with', traces.length, 'traces and optimized layout');
             Plotly.newPlot(DOM.plotDiv, traces, layout, config);
-            console.log('Plot rendering complete');
 
         } catch (error) {
-            console.error('Plot error:', error.message, error.stack);
             showMessage(`Plot rendering error: ${error.message}`, 'error');
         }
     }
 
     function updateMetadata(results) {
-        console.log('updateMetadata called');
         try {
             let html = '';
             
@@ -1415,34 +940,19 @@
 
             DOM.metadataContent.innerHTML = html;
             DOM.metadataPanel.classList.add('show');
-            console.log('Metadata updated successfully');
-        } catch (error) {
-            console.error('Metadata update error:', error.message);
-        }
+        } catch (error) {}
     }
 
     function updateProgress(current, total) {
-        console.log('updateProgress:', current, '/', total);
-        try {
-            const percent = Math.round((current / total) * 100);
-            DOM.progressFill.style.width = percent + '%';
-            DOM.progressText.textContent = `${current} of ${total} files processed`;
-        } catch (error) {
-            console.error('updateProgress error:', error.message);
-        }
+        const percent = Math.round((current / total) * 100);
+        DOM.progressFill.style.width = percent + '%';
+        DOM.progressText.textContent = `${current} of ${total} files processed`;
     }
 
     function showMessage(msg, type) {
-        console.log('showMessage:', type, '-', msg);
-        try {
-            DOM.messageBox.innerHTML = msg;
-            DOM.messageBox.className = `message-box show ${type}`;
-        } catch (error) {
-            console.error('showMessage error:', error.message);
-        }
+        DOM.messageBox.innerHTML = msg;
+        DOM.messageBox.className = `message-box show ${type}`;
     }
-
-    console.log('Flight Path Visualizer loaded and ready');
 </script>
 </body>
 </html>
