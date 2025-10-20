@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Path Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        #sidebar {
+            width: 380px;
+            background: rgba(10, 10, 20, 0.95);
+            padding: 25px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        #main-plot {
+            flex: 1;
+            overflow: hidden;
+            background: #0f0f1e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        h1 {
+            color: #32CD32;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+        
+        .upload-section {
+            background: #1a1a2e;
+            border: 2px dashed #32CD32;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            background: #222;
+            border-color: #44ff44;
+            box-shadow: 0 0 10px rgba(50, 205, 50, 0.3);
+        }
+        
+        .upload-section p {
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: #32CD32;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        .upload-btn:hover {
+            background: #44ff44;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(50, 205, 50, 0.3);
+        }
+        
+        .upload-btn:active {
+            transform: translateY(0);
+        }
+        
+        .status {
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.6;
+            display: none;
+        }
+        
+        .status.show {
+            display: block;
+        }
+        
+        .status.success {
+            border-left: 4px solid #32CD32;
+        }
+        
+        .status.error {
+            border-left: 4px solid #ff4136;
+            color: #ff6b6b;
+        }
+        
+        .status.processing {
+            border-left: 4px solid #ffdc00;
+            color: #ffd700;
+        }
+        
+        .metadata-panel {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.7;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .metadata-panel.show {
+            display: block;
+        }
+        
+        .metadata-panel h3 {
+            color: #32CD32;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .metadata-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .metadata-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metadata-label {
+            color: #888;
+            font-weight: 500;
+        }
+        
+        .metadata-value {
+            color: #32CD32;
+            text-align: right;
+        }
+        
+        .placeholder-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            padding: 40px;
+        }
+        
+        .footer {
+            font-size: 11px;
+            color: #555;
+            margin-top: auto;
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #444;
+            border-top-color: #32CD32;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            #sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+                border-right: none;
+                border-bottom: 1px solid #333;
+            }
+            
+            #main-plot {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="sidebar">
+            <div>
+                <h1>Flight Path Visualizer</h1>
+                <p class="subtitle">Drag folder or select images with GPS data</p>
+            </div>
+            
+            <div class="upload-section" id="uploadArea">
+                <p>Drag folder here or click to select</p>
+                <button class="upload-btn" onclick="selectFolder()">Select Folder/Files</button>
+                <input type="file" id="fileInput" multiple accept="image/*" webkitdirectory>
+            </div>
+            
+            <div class="status" id="status"></div>
+            
+            <div class="metadata-panel" id="metadataPanel">
+                <h3>Flight Data</h3>
+                <div id="metadataContent"></div>
+            </div>
+            
+            <div class="footer">
+                <p>Data never leaves your device</p>
+                <p>Works offline</p>
+            </div>
+        </div>
+        
+        <div id="main-plot">
+            <div class="placeholder-text">
+                <p>Select folder or images to visualize flight path</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const statusDiv = document.getElementById('status');
+        const metadataPanel = document.getElementById('metadataPanel');
+        const metadataContent = document.getElementById('metadataContent');
+        const plotDiv = document.getElementById('main-plot');
+
+        // Drag and drop with folder support
+        uploadArea.addEventListener('dragover', e => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#222';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = '';
+        });
+
+        uploadArea.addEventListener('drop', async e => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '';
+            
+            const items = e.dataTransfer.items;
+            const files = [];
+            
+            // Handle dragged folders/files
+            for (let item of items) {
+                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                if (entry) {
+                    const fileList = await getAllFilesFromEntry(entry);
+                    files.push(...fileList);
+                } else {
+                    // Fallback for unsupported browsers
+                    if (item.kind === 'file') {
+                        files.push(item.getAsFile());
+                    }
+                }
+            }
+            
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
+
+        async function getAllFilesFromEntry(entry, path = '') {
+            const files = [];
+            
+            if (entry.isFile) {
+                files.push(await new Promise((resolve, reject) => {
+                    entry.file(resolve, reject);
+                }));
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const entries = await new Promise((resolve, reject) => {
+                    reader.readEntries(resolve, reject);
+                });
+                
+                for (let childEntry of entries) {
+                    const childFiles = await getAllFilesFromEntry(childEntry, path + entry.name + '/');
+                    files.push(...childFiles);
+                }
+            }
+            
+            return files;
+        }
+
+        fileInput.addEventListener('change', e => {
+            handleFiles(e.target.files);
+        });
+
+        function selectFolder() {
+            fileInput.click();
+        }
+
+        async function handleFiles(files) {
+            const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) {
+                showStatus('No image files found', 'error');
+                return;
+            }
+
+            showStatus(`<span class="spinner"></span>Processing ${imageFiles.length} image(s)...`, 'processing');
+            
+            const points = [];
+            const metadata = {
+                cameras: new Set(),
+                timeRange: [],
+                latRange: [],
+                lonRange: [],
+                altRange: [],
+            };
+
+            for (let file of imageFiles) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const gpsData = extractGPS(arrayBuffer);
+                    
+                    if (gpsData) {
+                        points.push({
+                            lat: gpsData.latitude,
+                            lon: gpsData.longitude,
+                            alt: gpsData.altitude,
+                            filename: file.name,
+                        });
+
+                        metadata.latRange.push(gpsData.latitude);
+                        metadata.lonRange.push(gpsData.longitude);
+                        metadata.altRange.push(gpsData.altitude);
+                        
+                        if (gpsData.camera) metadata.cameras.add(gpsData.camera);
+                        if (gpsData.timestamp) metadata.timeRange.push(gpsData.timestamp);
+                    }
+                } catch (error) {
+                    console.error(`Error processing ${file.name}:`, error);
+                }
+            }
+
+            if (points.length === 0) {
+                showStatus('No GPS data found in images', 'error');
+                return;
+            }
+
+            // Sort by timestamp if available
+            points.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+            renderPlot(points);
+            updateMetadata(points, metadata);
+            showStatus(`Successfully plotted ${points.length} points from ${imageFiles.length} image(s)`, 'success');
+        }
+
+        function extractGPS(arrayBuffer) {
+            try {
+                const exifData = PIEXIF.load(arrayBuffer);
+                
+                if (!exifData.GPS) return null;
+
+                const gps = exifData.GPS;
+                
+                // Extract latitude
+                const latArray = gps[PIEXIF.GPSIFD.GPSLatitude];
+                if (!latArray) return null;
+                const latitude = latArray[0][0] / latArray[0][1] + 
+                               latArray[1][0] / (latArray[1][1] * 60) + 
+                               latArray[2][0] / (latArray[2][1] * 3600);
+                const latRef = gps[PIEXIF.GPSIFD.GPSLatitudeRef];
+                const lat = latRef === b'S' ? -latitude : latitude;
+
+                // Extract longitude
+                const lonArray = gps[PIEXIF.GPSIFD.GPSLongitude];
+                if (!lonArray) return null;
+                const longitude = lonArray[0][0] / lonArray[0][1] + 
+                                lonArray[1][0] / (lonArray[1][1] * 60) + 
+                                lonArray[2][0] / (lonArray[2][1] * 3600);
+                const lonRef = gps[PIEXIF.GPSIFD.GPSLongitudeRef];
+                const lon = lonRef === b'W' ? -longitude : longitude;
+
+                // Extract altitude
+                const altArray = gps[PIEXIF.GPSIFD.GPSAltitude];
+                const altitude = altArray ? altArray[0] / altArray[1] : 0;
+
+                // Extract camera info from IFD 0
+                let camera = null;
+                if (exifData['0th']) {
+                    const make = exifData['0th'][PIEXIF.ImageIFD.Make];
+                    const model = exifData['0th'][PIEXIF.ImageIFD.Model];
+                    if (make && model) {
+                        camera = `${make[0].toString().split('\0')[0]} ${model[0].toString().split('\0')[0]}`;
+                    }
+                }
+
+                return { latitude: lat, longitude: lon, altitude, camera };
+            } catch (error) {
+                console.error('EXIF extraction error:', error);
+                return null;
+            }
+        }
+
+        function renderPlot(points) {
+            const lats = points.map(p => p.lat);
+            const lons = points.map(p => p.lon);
+            const alts = points.map(p => p.alt);
+
+            const latMin = Math.min(...lats);
+            const latMax = Math.max(...lats);
+            const lonMin = Math.min(...lons);
+            const lonMax = Math.max(...lons);
+            const altMin = Math.min(...alts);
+            const altMax = Math.max(...alts);
+
+            const latMargin = (latMax - latMin) * 0.1 || 0.001;
+            const lonMargin = (lonMax - lonMin) * 0.1 || 0.001;
+            const altMargin = (altMax - altMin) * 0.1 || 10;
+
+            // Flight path line
+            const trace1 = {
+                x: lons,
+                y: lats,
+                z: alts,
+                mode: 'lines',
+                type: 'scatter3d',
+                line: { color: '#32CD32', width: 4 },
+                name: 'Flight Path',
+                hoverinfo: 'skip',
+            };
+
+            // Data points
+            const hoverTexts = points.map(p => 
+                `${p.filename}<br>Lat: ${p.lat.toFixed(6)}°<br>Lon: ${p.lon.toFixed(6)}°<br>Alt: ${p.alt.toFixed(1)}m`
+            );
+
+            const trace2 = {
+                x: lons,
+                y: lats,
+                z: alts,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: { size: 6, color: '#ff4136', opacity: 0.8 },
+                text: hoverTexts,
+                hovertemplate: '%{text}<extra></extra>',
+                name: 'Data Points',
+            };
+
+            // Ground plane
+            const xs = linspace(lonMin - lonMargin, lonMax + lonMargin, 15);
+            const ys = linspace(latMin - latMargin, latMax + latMargin, 15);
+            const [xMesh, yMesh] = meshgrid(xs, ys);
+            const zMesh = xMesh.map(row => row.map(() => altMin - altMargin));
+
+            const trace3 = {
+                x: xMesh,
+                y: yMesh,
+                z: zMesh,
+                type: 'surface',
+                colorscale: [[0, '#003300'], [1, '#003300']],
+                showscale: false,
+                opacity: 0.7,
+                hoverinfo: 'skip',
+                name: 'Ground',
+            };
+
+            const layout = {
+                title: `Flight Path - ${points.length} Points`,
+                scene: {
+                    xaxis: {
+                        title: 'Longitude',
+                        gridcolor: '#444',
+                        range: [lonMin - lonMargin, lonMax + lonMargin],
+                    },
+                    yaxis: {
+                        title: 'Latitude',
+                        gridcolor: '#444',
+                        range: [latMin - latMargin, latMax + latMargin],
+                    },
+                    zaxis: {
+                        title: 'Altitude (m)',
+                        gridcolor: '#444',
+                        range: [Math.max(0, altMin - altMargin), altMax + altMargin],
+                    },
+                    bgcolor: '#0f0f1e',
+                    camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } },
+                },
+                margin: { l: 0, r: 0, t: 50, b: 0 },
+                paper_bgcolor: '#0f0f1e',
+                plot_bgcolor: '#0f0f1e',
+                font: { color: '#e0e0e0' },
+                showlegend: true,
+            };
+
+            plotDiv.innerHTML = '';
+            Plotly.newPlot(plotDiv, [trace3, trace1, trace2], layout, { responsive: true });
+        }
+
+        function updateMetadata(points, metadata) {
+            let html = '';
+            
+            html += `<div class="metadata-row"><span class="metadata-label">Points:</span><span class="metadata-value">${points.length}</span></div>`;
+            
+            if (metadata.latRange.length > 0) {
+                html += `<div class="metadata-row"><span class="metadata-label">Latitude Range:</span><span class="metadata-value">${metadata.latRange[0].toFixed(4)}°</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.latRange[metadata.latRange.length - 1].toFixed(4)}°</span></div>`;
+            }
+            
+            if (metadata.lonRange.length > 0) {
+                html += `<div class="metadata-row"><span class="metadata-label">Longitude Range:</span><span class="metadata-value">${metadata.lonRange[0].toFixed(4)}°</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">to</span><span class="metadata-value">${metadata.lonRange[metadata.lonRange.length - 1].toFixed(4)}°</span></div>`;
+            }
+            
+            if (metadata.altRange.length > 0) {
+                html += `<div class="metadata-row"><span class="metadata-label">Altitude Min:</span><span class="metadata-value">${Math.min(...metadata.altRange).toFixed(0)}m</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Altitude Max:</span><span class="metadata-value">${Math.max(...metadata.altRange).toFixed(0)}m</span></div>`;
+            }
+            
+            if (metadata.cameras.size > 0) {
+                html += `<div class="metadata-row"><span class="metadata-label">Camera(s):</span><span class="metadata-value">${Array.from(metadata.cameras).join(', ')}</span></div>`;
+            }
+            
+            metadataContent.innerHTML = html;
+            metadataPanel.classList.add('show');
+        }
+
+        function showStatus(message, type) {
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status show ${type}`;
+        }
+
+        function linspace(start, end, num) {
+            const arr = [];
+            const step = (end - start) / (num - 1);
+            for (let i = 0; i < num; i++) {
+                arr.push(start + step * i);
+            }
+            return arr;
+        }
+
+        function meshgrid(xs, ys) {
+            const xMesh = [];
+            const yMesh = [];
+            for (let j = 0; j < ys.length; j++) {
+                xMesh.push([...xs]);
+                yMesh.push(ys.map(() => ys[j]));
+            }
+            return [xMesh, yMesh];
+        }
+    </script>
+</body>
+</html>
