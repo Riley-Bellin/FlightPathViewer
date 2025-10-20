@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flight Path Visualizer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -303,13 +303,13 @@
                 <p class="subtitle">Visualize drone flight paths from GPS image data</p>
             </div>
             
-            <div class="upload-section" id="uploadArea" role="button" tabindex="0" aria-label="Drag and drop images here or click button">
+            <div class="upload-section" id="uploadArea" role="button" tabindex="0" aria-label="Select image folder">
                 <p style="font-size: 24px; margin: 0 0 8px 0;">📁</p>
-                <p>Drag folder or click below</p>
-                <button class="upload-btn" id="selectBtn" aria-label="Select images to visualize">Select Images</button>
+                <p>Select folder with images</p>
+                <button class="upload-btn" id="selectBtn" aria-label="Select images folder">Select Folder</button>
             </div>
             
-            <input type="file" id="fileInput" multiple accept="image/*" aria-hidden="true">
+            <input type="file" id="fileInput" multiple webkitdirectory directory mozdirectory aria-hidden="true">
             
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar">
@@ -338,10 +338,11 @@
         const CONFIG = {
             MAX_FILES: 10000,
             VALID_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/bmp'],
-            BATCH_SIZE: 20,
+            BATCH_SIZE: 5,
             VALID_LAT_RANGE: [-90, 90],
             VALID_LON_RANGE: [-180, 180],
             VALID_ALT_RANGE: [-500, 50000],
+            OUTLIER_IQR_MULTIPLIER: 4.0,
         };
 
         const state = {
@@ -369,7 +370,7 @@
 
         DOM.fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                processFiles(Array.from(e.target.files));
+                processFolderFiles(Array.from(e.target.files));
             }
         });
 
@@ -395,9 +396,16 @@
             e.stopPropagation();
             DOM.uploadArea.classList.remove('drag-over');
             
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                const files = Array.from(e.dataTransfer.files);
-                handleDroppedFiles(files);
+            if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+                const files = [];
+                for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                    if (e.dataTransfer.items[i].kind === 'file') {
+                        files.push(e.dataTransfer.items[i].getAsFile());
+                    }
+                }
+                if (files.length > 0) {
+                    handleDroppedFiles(files);
+                }
             }
         });
 
@@ -419,20 +427,12 @@
         });
 
         async function handleDroppedFiles(files) {
-            const imageFiles = [];
-            
-            for (const file of files) {
-                if (isImageFile(file)) {
-                    imageFiles.push(file);
-                }
-            }
-
+            const imageFiles = files.filter(f => isImageFile(f));
             if (imageFiles.length === 0) {
                 showMessage('No image files found. Supported: JPG, PNG, TIFF, WebP, BMP', 'error');
                 return;
             }
-
-            processFiles(imageFiles);
+            processFolderFiles(imageFiles);
         }
 
         function isImageFile(file) {
@@ -440,225 +440,131 @@
                    /\.(jpg|jpeg|png|tiff|tif|webp|bmp)$/i.test(file.name);
         }
 
-        async function processFiles(files) {
-            if (state.isProcessing) {
-                showMessage('Already processing. Please wait.', 'warning');
-                return;
-            }
-
-            state.isProcessing = true;
-            DOM.selectBtn.disabled = true;
-            
-            showMessage(`<span class="spinner"></span>Processing ${files.length} file(s)...`, 'info');
-            DOM.progressContainer.classList.add('show');
-
-            const validFiles = files.filter(f => isImageFile(f));
-            
-            if (validFiles.length === 0) {
-                showMessage('No valid image files found', 'error');
-                state.isProcessing = false;
-                DOM.selectBtn.disabled = false;
-                DOM.progressContainer.classList.remove('show');
-                return;
-            }
-
-            const results = {
-                points: [],
-                stats: {
-                    processed: 0,
-                    gpsFound: 0,
-                    noGPS: 0,
-                    failed: 0,
-                },
-                metadata: {
-                    cameras: new Set(),
-                    lats: [],
-                    lons: [],
-                    alts: [],
-                },
-            };
-
+        function convertDMS(dmsInput) {
             try {
-                for (let i = 0; i < validFiles.length; i += CONFIG.BATCH_SIZE) {
-                    const batch = validFiles.slice(i, i + CONFIG.BATCH_SIZE);
-                    
-                    await Promise.all(batch.map(async (file) => {
-                        try {
-                            const buffer = await file.arrayBuffer();
-                            const gpsData = extractGPS(buffer, file.name);
-                            
-                            if (gpsData) {
-                                if (isValidGPS(gpsData)) {
-                                    results.points.push(gpsData);
-                                    results.metadata.lats.push(gpsData.latitude);
-                                    results.metadata.lons.push(gpsData.longitude);
-                                    results.metadata.alts.push(gpsData.altitude);
-                                    results.stats.gpsFound++;
-                                    
-                                    if (gpsData.camera) {
-                                        results.metadata.cameras.add(gpsData.camera);
-                                    }
-                                } else {
-                                    results.stats.failed++;
-                                }
-                            } else {
-                                results.stats.noGPS++;
-                            }
-                        } catch (err) {
-                            console.warn('File processing error:', err);
-                            results.stats.failed++;
-                        }
-                        
-                        results.stats.processed++;
-                        updateProgress(results.stats.processed, validFiles.length);
-                    }));
-                }
+                let d, m, s;
 
-                if (results.points.length === 0) {
-                    const message = results.stats.noGPS > 0 
-                        ? `No GPS data found in any of the ${validFiles.length} image(s).`
-                        : 'Could not extract GPS data from files.';
-                    showMessage(message, 'error');
+                if (typeof dmsInput === 'string') {
+                    const parts = dmsInput.split(',');
+                    if (parts.length < 3) return null;
+                    d = parseFloat(parts[0]);
+                    m = parseFloat(parts[1]);
+                    s = parseFloat(parts[2]);
+                } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
+                    d = dmsInput[0][0] / dmsInput[0][1];
+                    m = dmsInput[1][0] / (dmsInput[1][1] * 60);
+                    s = dmsInput[2][0] / (dmsInput[2][1] * 3600);
                 } else {
-                    results.points.sort((a, b) => a.filename.localeCompare(b.filename));
-                    renderPlot(results.points);
-                    updateMetadata(results);
-                    const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
-                    showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}`, 'success');
+                    return null;
                 }
-            } catch (error) {
-                console.error('Processing error:', error);
-                showMessage('Error during processing: ' + error.message, 'error');
-            } finally {
-                state.isProcessing = false;
-                DOM.selectBtn.disabled = false;
-                DOM.progressContainer.classList.remove('show');
-            }
-        }
 
-        function bytesToString(byteArray) {
-            if (!byteArray) return null;
-            try {
-                if (typeof byteArray === 'string') return byteArray;
-                if (byteArray instanceof Uint8Array || Array.isArray(byteArray)) {
-                    return String.fromCharCode.apply(null, byteArray).replace(/\0/g, '').trim();
+                if (!isFinite(d) || !isFinite(m) || !isFinite(s)) {
+                    return null;
                 }
-                return String(byteArray).replace(/\0/g, '').trim();
+
+                const result = d + m + s;
+                return isFinite(result) ? result : null;
             } catch (e) {
                 return null;
             }
         }
 
         function extractGPS(buffer, filename) {
-            try {
-                if (!buffer || buffer.byteLength === 0) {
-                    return null;
-                }
-
-                let exifData;
+            return new Promise((resolve) => {
                 try {
-                    exifData = PIEXIF.load(buffer);
-                } catch (e) {
-                    return null;
-                }
-
-                if (!exifData || !exifData.GPS) {
-                    return null;
-                }
-
-                const gps = exifData.GPS;
-
-                // Extract Latitude
-                const latArray = gps[PIEXIF.GPSIFD.GPSLatitude];
-                const latRef = gps[PIEXIF.GPSIFD.GPSLatitudeRef];
-                if (!latArray || !latRef) {
-                    return null;
-                }
-
-                const latitude = convertDMS(latArray);
-                if (latitude === null) {
-                    return null;
-                }
-                
-                const latRefStr = bytesToString(latRef);
-                const lat = latRefStr === 'S' ? -latitude : latitude;
-
-                // Extract Longitude
-                const lonArray = gps[PIEXIF.GPSIFD.GPSLongitude];
-                const lonRef = gps[PIEXIF.GPSIFD.GPSLongitudeRef];
-                if (!lonArray || !lonRef) {
-                    return null;
-                }
-
-                const longitude = convertDMS(lonArray);
-                if (longitude === null) {
-                    return null;
-                }
-                
-                const lonRefStr = bytesToString(lonRef);
-                const lon = lonRefStr === 'W' ? -longitude : longitude;
-
-                // Extract Altitude
-                const altitude = extractAltitude(gps);
-
-                // Extract Camera Info
-                let camera = null;
-                if (exifData['0th']) {
-                    const make = exifData['0th'][PIEXIF.ImageIFD.Make];
-                    const model = exifData['0th'][PIEXIF.ImageIFD.Model];
-                    
-                    if (make || model) {
-                        try {
-                            const makeStr = make ? bytesToString(make) : null;
-                            const modelStr = model ? bytesToString(model) : null;
-                            camera = [makeStr, modelStr].filter(Boolean).join(' ').trim() || null;
-                        } catch (e) {
-                            camera = null;
-                        }
+                    if (!buffer || buffer.byteLength === 0) {
+                        console.log(`Skipping ${filename}: empty buffer`);
+                        resolve(null);
+                        return;
                     }
+
+                    const blob = new Blob([buffer], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    
+                    img.onload = function() {
+                        try {
+                            EXIF.getData(img, function() {
+                                try {
+                                    const lat = EXIF.getTag(this, 'GPSLatitude');
+                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                    const lon = EXIF.getTag(this, 'GPSLongitude');
+                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                    const alt = EXIF.getTag(this, 'GPSAltitude');
+
+                                    if (!lat || !latRef || !lon || !lonRef) {
+                                        URL.revokeObjectURL(url);
+                                        resolve(null);
+                                        return;
+                                    }
+
+                                    const latitude = convertDMS(lat);
+                                    const longitude = convertDMS(lon);
+
+                                    if (latitude === null || longitude === null) {
+                                        URL.revokeObjectURL(url);
+                                        resolve(null);
+                                        return;
+                                    }
+
+                                    const finalLat = latRef === 'S' ? -latitude : latitude;
+                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                    
+                                    let altitude = 0;
+                                    if (alt) {
+                                        altitude = typeof alt === 'number' ? alt : (alt.numerator / alt.denominator || 0);
+                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                    }
+
+                                    let camera = null;
+                                    const make = EXIF.getTag(this, 'Make');
+                                    const model = EXIF.getTag(this, 'Model');
+                                    if (make || model) {
+                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                    }
+
+                                    URL.revokeObjectURL(url);
+                                    console.log(`SUCCESS: ${filename} - Lat: ${finalLat}, Lon: ${finalLon}, Alt: ${altitude}`);
+                                    resolve({
+                                        latitude: finalLat,
+                                        longitude: finalLon,
+                                        altitude: altitude,
+                                        filename: filename,
+                                        camera: camera,
+                                    });
+                                } catch (e) {
+                                    URL.revokeObjectURL(url);
+                                    console.error(`EXIF parse error for ${filename}:`, e.message);
+                                    resolve(null);
+                                }
+                            });
+                        } catch (e) {
+                            URL.revokeObjectURL(url);
+                            console.error(`EXIF.getData error for ${filename}:`, e.message);
+                            resolve(null);
+                        }
+                    };
+                    
+                    img.onerror = function(err) {
+                        URL.revokeObjectURL(url);
+                        console.warn(`Image load error for ${filename}`);
+                        resolve(null);
+                    };
+
+                    img.onabort = function() {
+                        URL.revokeObjectURL(url);
+                        console.warn(`Image load aborted for ${filename}`);
+                        resolve(null);
+                    };
+                    
+                    img.src = url;
+                } catch (error) {
+                    console.error(`GPS extraction error for ${filename}:`, error.message);
+                    resolve(null);
                 }
-
-                return {
-                    latitude: lat,
-                    longitude: lon,
-                    altitude: altitude,
-                    filename: filename,
-                    camera: camera,
-                };
-            } catch (error) {
-                console.warn(`GPS extraction error for ${filename}:`, error);
-                return null;
-            }
-        }
-
-        function extractAltitude(gps) {
-            try {
-                const altTag = gps[PIEXIF.GPSIFD.GPSAltitude];
-                if (altTag && altTag[0] !== undefined && altTag[1] !== undefined) {
-                    const altitude = altTag[0] / altTag[1];
-                    return isFinite(altitude) && altitude >= 0 ? altitude : 0;
-                }
-                return 0;
-            } catch (e) {
-                return 0;
-            }
-        }
-
-        function convertDMS(dmsArray) {
-            try {
-                if (!Array.isArray(dmsArray) || dmsArray.length < 3) {
-                    return null;
-                }
-
-                const d = dmsArray[0][0] / dmsArray[0][1];
-                const m = dmsArray[1][0] / (dmsArray[1][1] * 60);
-                const s = dmsArray[2][0] / (dmsArray[2][1] * 3600);
-                
-                const result = d + m + s;
-                return isFinite(result) ? result : null;
-            } catch (e) {
-                return null;
-            }
+            });
         }
 
         function isValidGPS(gpsData) {
@@ -685,81 +591,333 @@
             return true;
         }
 
-        function renderPlot(points) {
-            if (points.length === 0) {
+        function detectOutliers(points) {
+            if (points.length < 4) {
+                return { inliers: points, outliers: [] };
+            }
+
+            const lats = points.map(p => p.latitude);
+            const lons = points.map(p => p.longitude);
+
+            function iqrBounds(arr) {
+                const sorted = [...arr].sort((a, b) => a - b);
+                const q1Idx = Math.floor(sorted.length * 0.25);
+                const q3Idx = Math.floor(sorted.length * 0.75);
+                const q1 = sorted[q1Idx];
+                const q3 = sorted[q3Idx];
+                const iqr = q3 - q1;
+                const lower = q1 - CONFIG.OUTLIER_IQR_MULTIPLIER * iqr;
+                const upper = q3 + CONFIG.OUTLIER_IQR_MULTIPLIER * iqr;
+                return { lower, upper };
+            }
+
+            const latBounds = iqrBounds(lats);
+            const lonBounds = iqrBounds(lons);
+
+            const inliers = [];
+            const outliers = [];
+
+            points.forEach(point => {
+                const isOutlier = (
+                    point.latitude < latBounds.lower ||
+                    point.latitude > latBounds.upper ||
+                    point.longitude < lonBounds.lower ||
+                    point.longitude > lonBounds.upper
+                );
+
+                if (isOutlier) {
+                    outliers.push(point);
+                } else {
+                    inliers.push(point);
+                }
+            });
+
+            return { inliers, outliers };
+        }
+
+        async function processFolderFiles(files) {
+            if (state.isProcessing) {
+                showMessage('Already processing. Please wait.', 'warning');
+                return;
+            }
+
+            state.isProcessing = true;
+            DOM.selectBtn.disabled = true;
+            
+            showMessage(`<span class="spinner"></span>Processing ${files.length} file(s)...`, 'info');
+            DOM.progressContainer.classList.add('show');
+
+            const validFiles = files.filter(f => isImageFile(f));
+            
+            if (validFiles.length === 0) {
+                showMessage('No valid image files found', 'error');
+                state.isProcessing = false;
+                DOM.selectBtn.disabled = false;
+                DOM.progressContainer.classList.remove('show');
+                return;
+            }
+
+            const results = {
+                points: [],
+                inliers: [],
+                outliers: [],
+                stats: {
+                    processed: 0,
+                    gpsFound: 0,
+                    noGPS: 0,
+                    failed: 0,
+                },
+                metadata: {
+                    cameras: new Set(),
+                    lats: [],
+                    lons: [],
+                    alts: [],
+                },
+                folderMap: {},
+            };
+
+            try {
+                for (let i = 0; i < validFiles.length; i += CONFIG.BATCH_SIZE) {
+                    const batch = validFiles.slice(i, i + CONFIG.BATCH_SIZE);
+                    
+                    await Promise.all(batch.map(async (file) => {
+                        try {
+                            const buffer = await file.arrayBuffer();
+                            const gpsData = await extractGPS(buffer, file.name);
+                            
+                            if (gpsData) {
+                                if (isValidGPS(gpsData)) {
+                                    results.points.push(gpsData);
+                                    results.metadata.lats.push(gpsData.latitude);
+                                    results.metadata.lons.push(gpsData.longitude);
+                                    results.metadata.alts.push(gpsData.altitude);
+                                    results.stats.gpsFound++;
+                                    
+                                    if (gpsData.camera) {
+                                        results.metadata.cameras.add(gpsData.camera);
+                                    }
+
+                                    const folder = file.webkitRelativePath.split('/')[0];
+                                    if (!results.folderMap[folder]) {
+                                        results.folderMap[folder] = [];
+                                    }
+                                    results.folderMap[folder].push(gpsData);
+                                } else {
+                                    results.stats.failed++;
+                                }
+                            } else {
+                                results.stats.noGPS++;
+                            }
+                        } catch (err) {
+                            console.warn('File processing error:', err);
+                            results.stats.failed++;
+                        }
+                        
+                        results.stats.processed++;
+                        updateProgress(results.stats.processed, validFiles.length);
+                    }));
+                }
+
+                if (results.points.length === 0) {
+                    const message = results.stats.noGPS > 0 
+                        ? `No GPS data found in any of the ${validFiles.length} image(s).`
+                        : 'Could not extract GPS data from files.';
+                    showMessage(message, 'error');
+                } else {
+                    results.points.sort((a, b) => a.filename.localeCompare(b.filename));
+                    
+                    const outlierResult = detectOutliers(results.points);
+                    results.inliers = outlierResult.inliers;
+                    results.outliers = outlierResult.outliers;
+
+                    renderPlot(results);
+                    updateMetadata(results);
+                    const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
+                    const outlierMsg = results.outliers.length > 0 ? ` • ${results.outliers.length} outlier(s)` : '';
+                    showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}${outlierMsg}`, 'success');
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                showMessage('Error during processing: ' + error.message, 'error');
+            } finally {
+                state.isProcessing = false;
+                DOM.selectBtn.disabled = false;
+                DOM.progressContainer.classList.remove('show');
+            }
+        }
+
+        function renderPlot(results) {
+            if (results.inliers.length === 0 && results.outliers.length === 0) {
                 return;
             }
 
             try {
-                const lats = points.map(p => p.latitude);
-                const lons = points.map(p => p.longitude);
-                const alts = points.map(p => p.altitude);
+                const inlierLats = results.inliers.map(p => p.latitude);
+                const inlierLons = results.inliers.map(p => p.longitude);
+                const inlierAlts = results.inliers.map(p => p.altitude);
 
-                const latMin = Math.min(...lats);
-                const latMax = Math.max(...lats);
-                const lonMin = Math.min(...lons);
-                const lonMax = Math.max(...lons);
-                const altMin = Math.min(...alts);
-                const altMax = Math.max(...alts);
+                let latMin, latMax, lonMin, lonMax, altMin, altMax;
+
+                if (inlierLats.length > 0) {
+                    latMin = Math.min(...inlierLats);
+                    latMax = Math.max(...inlierLats);
+                    lonMin = Math.min(...inlierLons);
+                    lonMax = Math.max(...inlierLons);
+                    altMin = Math.min(...inlierAlts);
+                    altMax = Math.max(...inlierAlts);
+                } else {
+                    const outlierLats = results.outliers.map(p => p.latitude);
+                    const outlierLons = results.outliers.map(p => p.longitude);
+                    const outlierAlts = results.outliers.map(p => p.altitude);
+                    latMin = Math.min(...outlierLats);
+                    latMax = Math.max(...outlierLats);
+                    lonMin = Math.min(...outlierLons);
+                    lonMax = Math.max(...outlierLons);
+                    altMin = Math.min(...outlierAlts);
+                    altMax = Math.max(...outlierAlts);
+                }
 
                 const latMargin = Math.max((latMax - latMin) * 0.15, 0.001);
                 const lonMargin = Math.max((lonMax - lonMin) * 0.15, 0.001);
                 const altMargin = Math.max((altMax - altMin) * 0.15, 10);
 
-                const trace1 = {
-                    x: lons,
-                    y: lats,
-                    z: alts,
-                    mode: 'lines',
-                    type: 'scatter3d',
-                    line: { color: '#32CD32', width: 4 },
-                    name: 'Flight Path',
-                };
+                const groundZ = Math.max(0, altMin - altMargin);
+                const zMax = altMax + altMargin;
 
-                const hover = points.map(p => 
-                    `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m`
-                );
+                if (inlierLats.length > 0 && inlierLons.length > 0 && zMax > groundZ) {
+                    const nx = 20, ny = 20;
+                    const xs = [];
+                    const ys = [];
+                    for (let i = 0; i < nx; i++) {
+                        xs.push(lonMin - lonMargin + (i / (nx - 1)) * (lonMax - lonMin + 2 * lonMargin));
+                    }
+                    for (let i = 0; i < ny; i++) {
+                        ys.push(latMin - latMargin + (i / (ny - 1)) * (latMax - latMin + 2 * latMargin));
+                    }
 
-                const trace2 = {
-                    x: lons,
-                    y: lats,
-                    z: alts,
-                    mode: 'markers',
-                    type: 'scatter3d',
-                    marker: { size: 5, color: '#ff4136' },
-                    text: hover,
-                    hovertemplate: '%{text}<extra></extra>',
-                    name: 'GPS Points',
-                };
+                    const xMesh = [];
+                    const yMesh = [];
+                    const zMesh = [];
+                    for (let i = 0; i < ny; i++) {
+                        const xRow = [];
+                        const yRow = [];
+                        const zRow = [];
+                        for (let j = 0; j < nx; j++) {
+                            xRow.push(xs[j]);
+                            yRow.push(ys[i]);
+                            zRow.push(groundZ);
+                        }
+                        xMesh.push(xRow);
+                        yMesh.push(yRow);
+                        zMesh.push(zRow);
+                    }
 
-                const layout = {
-                    title: `Flight Path - ${points.length} Points`,
-                    scene: {
-                        xaxis: { 
-                            title: 'Longitude', 
-                            gridcolor: '#444',
-                            range: [lonMin - lonMargin, lonMax + lonMargin] 
+                    const flatColor = Array(ny).fill().map(() => Array(nx).fill(0));
+
+                    Plotly.newPlot(DOM.plotDiv, [
+                        {
+                            x: xMesh,
+                            y: yMesh,
+                            z: zMesh,
+                            surfacecolor: flatColor,
+                            colorscale: [[0, '#002200'], [1, '#002200']],
+                            showscale: false,
+                            opacity: 1.0,
+                            hoverinfo: 'skip',
+                            name: 'Ground',
+                            type: 'surface'
+                        }
+                    ], {
+                        title: `Flight Path - ${results.points.length} Points`,
+                        scene: {
+                            xaxis: { 
+                                title: 'Longitude', 
+                                gridcolor: '#444',
+                                range: [lonMin - lonMargin, lonMax + lonMargin]
+                            },
+                            yaxis: { 
+                                title: 'Latitude', 
+                                gridcolor: '#444',
+                                range: [latMin - latMargin, latMax + latMargin]
+                            },
+                            zaxis: { 
+                                title: 'Altitude (m)', 
+                                gridcolor: '#444',
+                                range: [groundZ, zMax]
+                            },
+                            bgcolor: '#0f0f1e',
                         },
-                        yaxis: { 
-                            title: 'Latitude', 
-                            gridcolor: '#444',
-                            range: [latMin - latMargin, latMax + latMargin] 
+                        margin: { l: 0, r: 0, t: 40, b: 0 },
+                        paper_bgcolor: '#0f0f1e',
+                        plot_bgcolor: '#0f0f1e',
+                        font: { color: '#e0e0e0' },
+                    }, { responsive: true });
+                } else {
+                    Plotly.newPlot(DOM.plotDiv, [], {
+                        title: `Flight Path - ${results.points.length} Points`,
+                        scene: {
+                            xaxis: { title: 'Longitude', gridcolor: '#444' },
+                            yaxis: { title: 'Latitude', gridcolor: '#444' },
+                            zaxis: { title: 'Altitude (m)', gridcolor: '#444' },
+                            bgcolor: '#0f0f1e',
                         },
-                        zaxis: { 
-                            title: 'Altitude (m)', 
-                            gridcolor: '#444',
-                            range: [Math.max(0, altMin - altMargin), altMax + altMargin] 
-                        },
-                        bgcolor: '#0f0f1e',
-                    },
-                    margin: { l: 0, r: 0, t: 40, b: 0 },
-                    paper_bgcolor: '#0f0f1e',
-                    plot_bgcolor: '#0f0f1e',
-                    font: { color: '#e0e0e0' },
-                };
+                        margin: { l: 0, r: 0, t: 40, b: 0 },
+                        paper_bgcolor: '#0f0f1e',
+                        plot_bgcolor: '#0f0f1e',
+                        font: { color: '#e0e0e0' },
+                    }, { responsive: true });
+                }
 
-                DOM.plotDiv.innerHTML = '';
-                Plotly.newPlot(DOM.plotDiv, [trace1, trace2], layout, { responsive: true });
+                const traces = [];
+
+                if (results.inliers.length > 0) {
+                    const inlierLons = results.inliers.map(p => p.longitude);
+                    const inlierLats = results.inliers.map(p => p.latitude);
+                    const inlierAlts = results.inliers.map(p => p.altitude);
+
+                    const hover = results.inliers.map(p => 
+                        `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m`
+                    );
+
+                    traces.push({
+                        x: inlierLons,
+                        y: inlierLats,
+                        z: inlierAlts,
+                        mode: 'lines+markers',
+                        type: 'scatter3d',
+                        line: { color: '#32CD32', width: 4 },
+                        marker: { size: 5, color: '#32CD32' },
+                        text: hover,
+                        hovertemplate: '%{text}<extra></extra>',
+                        name: 'Flight Path',
+                    });
+                }
+
+                if (results.outliers.length > 0) {
+                    const outlierLons = results.outliers.map(p => p.longitude);
+                    const outlierLats = results.outliers.map(p => p.latitude);
+                    const outlierAlts = results.outliers.map(p => p.altitude);
+
+                    const hover = results.outliers.map(p => 
+                        `${p.filename}<br>Lat: ${p.latitude.toFixed(6)}°<br>Lon: ${p.longitude.toFixed(6)}°<br>Alt: ${p.altitude.toFixed(1)}m<br>(OUTLIER)`
+                    );
+
+                    traces.push({
+                        x: outlierLons,
+                        y: outlierLats,
+                        z: outlierAlts,
+                        mode: 'markers',
+                        type: 'scatter3d',
+                        marker: { size: 8, color: '#ff4136', symbol: 'diamond' },
+                        text: hover,
+                        hovertemplate: '%{text}<extra></extra>',
+                        name: 'Outliers',
+                    });
+                }
+
+                if (traces.length > 0) {
+                    Plotly.addTraces(DOM.plotDiv, traces);
+                }
             } catch (error) {
                 console.error('Plot error:', error);
                 showMessage('Error rendering plot', 'error');
@@ -771,6 +929,8 @@
                 let html = '';
                 html += `<div class="metadata-row"><span class="metadata-label">GPS Points:</span><span class="metadata-value">${results.points.length}</span></div>`;
                 html += `<div class="metadata-row"><span class="metadata-label">Images Processed:</span><span class="metadata-value">${results.stats.gpsFound}</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Inliers:</span><span class="metadata-value">${results.inliers.length}</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Outliers:</span><span class="metadata-value">${results.outliers.length}</span></div>`;
                 
                 if (results.stats.noGPS > 0) {
                     html += `<div class="metadata-row"><span class="metadata-label">No GPS Data:</span><span class="metadata-value">${results.stats.noGPS}</span></div>`;
