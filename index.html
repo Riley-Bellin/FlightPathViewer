@@ -532,7 +532,19 @@
                 m = parseFloat(parts[1]);
                 s = parseFloat(parts[2]);
             } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
-                if (dmsInput[0] && typeof dmsInput[0] === 'object' && !Array.isArray(dmsInput[0])) {
+                if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
+                    d = dmsInput[0];
+                    m = dmsInput[1];
+                    s = dmsInput[2];
+                } else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
+                    if (dmsInput[0].length >= 2 && dmsInput[1].length >= 2 && dmsInput[2].length >= 2) {
+                        d = dmsInput[0][0] / dmsInput[0][1];
+                        m = dmsInput[1][0] / dmsInput[1][1];
+                        s = dmsInput[2][0] / dmsInput[2][1];
+                    } else {
+                        return null;
+                    }
+                } else if (dmsInput[0] && typeof dmsInput[0] === 'object' && !Array.isArray(dmsInput[0])) {
                     if (dmsInput[0].hasOwnProperty('numerator') && dmsInput[0].hasOwnProperty('denominator')) {
                         d = dmsInput[0].numerator / dmsInput[0].denominator;
                         m = dmsInput[1].numerator / dmsInput[1].denominator;
@@ -540,14 +552,6 @@
                     } else {
                         return null;
                     }
-                } else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
-                    d = dmsInput[0][0] / dmsInput[0][1];
-                    m = dmsInput[1][0] / dmsInput[1][1];
-                    s = dmsInput[2][0] / dmsInput[2][1];
-                } else if (typeof dmsInput[0] === 'number') {
-                    d = dmsInput[0];
-                    m = dmsInput[1];
-                    s = dmsInput[2];
                 } else {
                     return null;
                 }
@@ -639,11 +643,13 @@
                                 const finalLon = lonRef === 'W' ? -longitude : longitude;
                                 
                                 let altitude = 0;
-                                if (alt) {
-                                    if (alt.numerator !== undefined && alt.denominator !== undefined) {
-                                        altitude = alt.numerator / alt.denominator;
-                                    } else if (typeof alt === 'number') {
+                                if (alt !== null && alt !== undefined) {
+                                    if (typeof alt === 'number') {
                                         altitude = alt;
+                                    } else if (alt.numerator !== undefined && alt.denominator !== undefined) {
+                                        altitude = alt.numerator / alt.denominator;
+                                    } else if (Array.isArray(alt) && alt.length >= 2) {
+                                        altitude = alt[0] / alt[1];
                                     }
                                     altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
                                 }
