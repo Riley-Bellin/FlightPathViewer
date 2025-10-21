@@ -411,8 +411,7 @@
         MAX_FILES: 10000,
         VALID_IMAGE_TYPES: ['image/jpeg'],
         BATCH_SIZE: 50,
-        EXIF_TIMEOUT: 2000,
-        IMAGE_LOAD_TIMEOUT: 3000,
+        EXIF_TIMEOUT: 3000,
         MAX_FOLDERS_TO_RENDER: 50,
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
@@ -567,129 +566,109 @@
         }
     }
 
-    function extractGPS(buffer, filename) {
+    function extractGPS(file, filename) {
         return new Promise((resolve) => {
-            let url = null;
-            let img = null;
             let timeoutId = null;
-            let imageLoadTimeoutId = null;
             let resolved = false;
-
-            const cleanup = () => {
-                if (timeoutId) clearTimeout(timeoutId);
-                if (imageLoadTimeoutId) clearTimeout(imageLoadTimeoutId);
-                if (url) {
-                    try {
-                        URL.revokeObjectURL(url);
-                    } catch (e) {}
-                }
-                img = null;
-            };
 
             const safeResolve = (data) => {
                 if (resolved) return;
                 resolved = true;
-                cleanup();
+                if (timeoutId) clearTimeout(timeoutId);
                 resolve(data);
             };
 
             try {
-                if (!buffer || buffer.byteLength === 0) {
-                    return safeResolve(null);
-                }
-
-                const blob = new Blob([buffer], { type: 'image/jpeg' });
-                url = URL.createObjectURL(blob);
+                const reader = new FileReader();
                 
-                img = new Image();
-                img.crossOrigin = "anonymous";
-                
-                imageLoadTimeoutId = setTimeout(() => {
+                timeoutId = setTimeout(() => {
                     safeResolve(null);
-                }, CONFIG.IMAGE_LOAD_TIMEOUT);
+                }, CONFIG.EXIF_TIMEOUT);
                 
-                img.onload = function() {
+                reader.onerror = () => {
+                    safeResolve(null);
+                };
+                
+                reader.onload = function(e) {
                     if (resolved) return;
-                    clearTimeout(imageLoadTimeoutId);
                     
-                    timeoutId = setTimeout(() => {
+                    const img = new Image();
+                    
+                    img.onerror = () => {
                         safeResolve(null);
-                    }, CONFIG.EXIF_TIMEOUT);
-
-                    try {
-                        EXIF.getData(img, function() {
-                            if (resolved) return;
-                            clearTimeout(timeoutId);
-                            
-                            try {
-                                const lat = EXIF.getTag(this, 'GPSLatitude');
-                                const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
-                                const lon = EXIF.getTag(this, 'GPSLongitude');
-                                const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
-                                const alt = EXIF.getTag(this, 'GPSAltitude');
-
-                                if (!lat || !latRef || !lon || !lonRef) {
-                                    return safeResolve(null);
-                                }
-
-                                const latitude = convertDMS(lat);
-                                const longitude = convertDMS(lon);
-
-                                if (latitude === null || longitude === null) {
-                                    return safeResolve(null);
-                                }
-
-                                const finalLat = latRef === 'S' ? -latitude : latitude;
-                                const finalLon = lonRef === 'W' ? -longitude : longitude;
+                    };
+                    
+                    img.onabort = () => {
+                        safeResolve(null);
+                    };
+                    
+                    img.onload = function() {
+                        if (resolved) return;
+                        
+                        try {
+                            EXIF.getData(img, function() {
+                                if (resolved) return;
                                 
-                                let altitude = 0;
-                                if (alt !== null && alt !== undefined) {
-                                    if (typeof alt === 'number') {
-                                        altitude = alt;
-                                    } else if (alt.numerator !== undefined && alt.denominator !== undefined) {
-                                        altitude = alt.numerator / alt.denominator;
-                                    } else if (Array.isArray(alt) && alt.length >= 2) {
-                                        altitude = alt[0] / alt[1];
+                                try {
+                                    const lat = EXIF.getTag(this, 'GPSLatitude');
+                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                    const lon = EXIF.getTag(this, 'GPSLongitude');
+                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                    const alt = EXIF.getTag(this, 'GPSAltitude');
+
+                                    if (!lat || !latRef || !lon || !lonRef) {
+                                        return safeResolve(null);
                                     }
-                                    altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
-                                }
 
-                                let camera = null;
-                                const make = EXIF.getTag(this, 'Make');
-                                const model = EXIF.getTag(this, 'Model');
-                                if (make || model) {
-                                    camera = [make, model].filter(Boolean).join(' ').trim() || null;
-                                }
+                                    const latitude = convertDMS(lat);
+                                    const longitude = convertDMS(lon);
 
-                                safeResolve({
-                                    latitude: finalLat,
-                                    longitude: finalLon,
-                                    altitude: altitude,
-                                    filename: filename,
-                                    camera: camera,
-                                });
-                            } catch (tagError) {
-                                return safeResolve(null);
-                            }
-                        });
-                    } catch (exifCallError) {
-                        return safeResolve(null);
-                    }
+                                    if (latitude === null || longitude === null) {
+                                        return safeResolve(null);
+                                    }
+
+                                    const finalLat = latRef === 'S' ? -latitude : latitude;
+                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                    
+                                    let altitude = 0;
+                                    if (alt !== null && alt !== undefined) {
+                                        if (typeof alt === 'number') {
+                                            altitude = alt;
+                                        } else if (alt.numerator !== undefined && alt.denominator !== undefined) {
+                                            altitude = alt.numerator / alt.denominator;
+                                        } else if (Array.isArray(alt) && alt.length >= 2) {
+                                            altitude = alt[0] / alt[1];
+                                        }
+                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                    }
+
+                                    let camera = null;
+                                    const make = EXIF.getTag(this, 'Make');
+                                    const model = EXIF.getTag(this, 'Model');
+                                    if (make || model) {
+                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                    }
+
+                                    safeResolve({
+                                        latitude: finalLat,
+                                        longitude: finalLon,
+                                        altitude: altitude,
+                                        filename: filename,
+                                        camera: camera,
+                                    });
+                                } catch (tagError) {
+                                    return safeResolve(null);
+                                }
+                            });
+                        } catch (exifCallError) {
+                            return safeResolve(null);
+                        }
+                    };
+                    
+                    img.src = e.target.result;
                 };
                 
-                img.onerror = function() {
-                    if (resolved) return;
-                    clearTimeout(imageLoadTimeoutId);
-                    safeResolve(null);
-                };
-
-                img.onabort = function() {
-                    if (resolved) return;
-                    clearTimeout(imageLoadTimeoutId);
-                    safeResolve(null);
-                };
-                
-                img.src = url;
+                reader.readAsDataURL(file);
             } catch (error) {
                 safeResolve(null);
             }
@@ -788,8 +767,7 @@
                             return;
                         }
 
-                        const buffer = await file.arrayBuffer();
-                        const gpsData = await extractGPS(buffer, relPath);
+                        const gpsData = await extractGPS(file, relPath);
                         
                         if (gpsData && isValidGPS(gpsData)) {
                             results.points.push(gpsData);
