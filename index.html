@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flight Path Visualizer</title>
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -410,8 +410,8 @@
     const CONFIG = {
         MAX_FILES: 10000,
         VALID_IMAGE_TYPES: ['image/jpeg'],
-        BATCH_SIZE: 20,
-        EXIF_TIMEOUT: 5000,
+        BATCH_SIZE: 150,
+        EXIF_TIMEOUT: 1500,
         MAX_FOLDERS_TO_RENDER: 50,
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
@@ -520,9 +520,55 @@
         }
     }
 
+    function convertDMS(dmsInput) {
+        try {
+            let d, m, s;
+
+            if (typeof dmsInput === 'string') {
+                const parts = dmsInput.split(',');
+                if (parts.length < 3) return null;
+                d = parseFloat(parts[0]);
+                m = parseFloat(parts[1]);
+                s = parseFloat(parts[2]);
+            } else if (Array.isArray(dmsInput) && dmsInput.length >= 3) {
+                if (typeof dmsInput[0] === 'number' && typeof dmsInput[1] === 'number' && typeof dmsInput[2] === 'number') {
+                    d = dmsInput[0];
+                    m = dmsInput[1];
+                    s = dmsInput[2];
+                } else if (Array.isArray(dmsInput[0]) && Array.isArray(dmsInput[1]) && Array.isArray(dmsInput[2])) {
+                    if (dmsInput[0].length >= 2 && dmsInput[1].length >= 2 && dmsInput[2].length >= 2) {
+                        d = dmsInput[0][0] / dmsInput[0][1];
+                        m = dmsInput[1][0] / dmsInput[1][1];
+                        s = dmsInput[2][0] / dmsInput[2][1];
+                    } else {
+                        return null;
+                    }
+                } else if (dmsInput[0] && typeof dmsInput[0] === 'object' && !Array.isArray(dmsInput[0])) {
+                    if (dmsInput[0].hasOwnProperty('numerator') && dmsInput[0].hasOwnProperty('denominator')) {
+                        d = dmsInput[0].numerator / dmsInput[0].denominator;
+                        m = dmsInput[1].numerator / dmsInput[1].denominator;
+                        s = dmsInput[2].numerator / dmsInput[2].denominator;
+                    } else {
+                        return null;
+                    }
+                } else {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+
+            if (!isFinite(d) || !isFinite(m) || !isFinite(s)) return null;
+            const result = d + (m / 60) + (s / 3600);
+            return isFinite(result) ? result : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function extractGPS(file, filename, retryCount = 0) {
         return new Promise((resolve) => {
-            const MAX_RETRIES = 2;
+            const MAX_RETRIES = 1;
             let timeoutId = null;
             let resolved = false;
 
@@ -544,65 +590,118 @@
             };
 
             try {
+                const reader = new FileReader();
+                
                 timeoutId = setTimeout(() => {
                     if (!resolved) {
                         attemptRetry();
                     }
                 }, CONFIG.EXIF_TIMEOUT);
-
-                exifr.parse(file, {
-                    gps: true,
-                    exif: true,
-                    tiff: true,
-                    mergeOutput: true,
-                    sanitize: false,
-                    reviveValues: true,
-                    translateKeys: false,
-                    translateValues: false,
-                    pick: ['latitude', 'longitude', 'GPSAltitude', 'Make', 'Model']
-                }).then(exifData => {
-                    if (resolved) return;
-                    
-                    if (!exifData) {
-                        return attemptRetry();
-                    }
-
-                    const latitude = exifData.latitude;
-                    const longitude = exifData.longitude;
-                    const altitude = exifData.GPSAltitude;
-
-                    if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
-                        return attemptRetry();
-                    }
-
-                    if (!isFinite(latitude) || !isFinite(longitude)) {
-                        return attemptRetry();
-                    }
-
-                    let finalAltitude = 0;
-                    if (altitude !== null && altitude !== undefined && isFinite(altitude) && altitude >= 0) {
-                        finalAltitude = altitude;
-                    }
-
-                    let camera = null;
-                    const make = exifData.Make;
-                    const model = exifData.Model;
-                    if (make || model) {
-                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
-                    }
-
-                    safeResolve({
-                        latitude: latitude,
-                        longitude: longitude,
-                        altitude: finalAltitude,
-                        filename: filename,
-                        camera: camera,
-                    });
-                }).catch(error => {
+                
+                reader.onerror = () => {
                     if (!resolved) {
                         attemptRetry();
                     }
-                });
+                };
+                
+                reader.onload = function(e) {
+                    if (resolved) return;
+                    
+                    const img = new Image();
+                    
+                    img.onerror = () => {
+                        if (!resolved) {
+                            attemptRetry();
+                        }
+                    };
+                    
+                    img.onabort = () => {
+                        if (!resolved) {
+                            attemptRetry();
+                        }
+                    };
+                    
+                    img.onload = function() {
+                        if (resolved) return;
+                        
+                        let exifCallbackFired = false;
+                        
+                        const exifTimeout = setTimeout(() => {
+                            if (!exifCallbackFired && !resolved) {
+                                attemptRetry();
+                            }
+                        }, 1000);
+                        
+                        try {
+                            EXIF.getData(img, function() {
+                                exifCallbackFired = true;
+                                clearTimeout(exifTimeout);
+                                
+                                if (resolved) return;
+                                
+                                try {
+                                    const allTags = EXIF.getAllTags(this);
+                                    
+                                    const lat = allTags.GPSLatitude || EXIF.getTag(this, 'GPSLatitude');
+                                    const latRef = allTags.GPSLatitudeRef || EXIF.getTag(this, 'GPSLatitudeRef');
+                                    const lon = allTags.GPSLongitude || EXIF.getTag(this, 'GPSLongitude');
+                                    const lonRef = allTags.GPSLongitudeRef || EXIF.getTag(this, 'GPSLongitudeRef');
+                                    const alt = allTags.GPSAltitude || EXIF.getTag(this, 'GPSAltitude');
+
+                                    if (!lat || !latRef || !lon || !lonRef) {
+                                        return attemptRetry();
+                                    }
+
+                                    const latitude = convertDMS(lat);
+                                    const longitude = convertDMS(lon);
+
+                                    if (latitude === null || longitude === null) {
+                                        return attemptRetry();
+                                    }
+
+                                    const finalLat = latRef === 'S' ? -latitude : latitude;
+                                    const finalLon = lonRef === 'W' ? -longitude : longitude;
+                                    
+                                    let altitude = 0;
+                                    if (alt !== null && alt !== undefined) {
+                                        if (typeof alt === 'number') {
+                                            altitude = alt;
+                                        } else if (alt.numerator !== undefined && alt.denominator !== undefined) {
+                                            altitude = alt.numerator / alt.denominator;
+                                        } else if (Array.isArray(alt) && alt.length >= 2) {
+                                            altitude = alt[0] / alt[1];
+                                        }
+                                        altitude = isFinite(altitude) && altitude >= 0 ? altitude : 0;
+                                    }
+
+                                    let camera = null;
+                                    const make = allTags.Make || EXIF.getTag(this, 'Make');
+                                    const model = allTags.Model || EXIF.getTag(this, 'Model');
+                                    if (make || model) {
+                                        camera = [make, model].filter(Boolean).join(' ').trim() || null;
+                                    }
+
+                                    safeResolve({
+                                        latitude: finalLat,
+                                        longitude: finalLon,
+                                        altitude: altitude,
+                                        filename: filename,
+                                        camera: camera,
+                                    });
+                                } catch (tagError) {
+                                    return attemptRetry();
+                                }
+                            });
+                        } catch (exifCallError) {
+                            clearTimeout(exifTimeout);
+                            return attemptRetry();
+                        }
+                    };
+                    
+                    img.src = e.target.result;
+                };
+                
+                reader.readAsDataURL(file);
             } catch (error) {
                 attemptRetry();
             }
