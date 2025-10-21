@@ -410,8 +410,8 @@
     const CONFIG = {
         MAX_FILES: 10000,
         VALID_IMAGE_TYPES: ['image/jpeg'],
-        BATCH_SIZE: 100,
-        EXIF_TIMEOUT: 3500,
+        BATCH_SIZE: 20,
+        EXIF_TIMEOUT: 5000,
         MAX_FOLDERS_TO_RENDER: 50,
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
@@ -537,7 +537,7 @@
                 if (retryCount < MAX_RETRIES) {
                     setTimeout(() => {
                         extractGPS(file, filename, retryCount + 1).then(safeResolve);
-                    }, 50);
+                    }, 100);
                 } else {
                     safeResolve(null);
                 }
@@ -736,7 +736,7 @@
                     results.stats.processed++;
                     
                     const now = Date.now();
-                    if (now - lastProgressUpdate > 250) {
+                    if (now - lastProgressUpdate > 100) {
                         updateProgress(results.stats.processed, validFiles.length);
                         lastProgressUpdate = now;
                     }
