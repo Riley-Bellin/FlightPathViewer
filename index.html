@@ -416,7 +416,7 @@
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
         VALID_ALT_RANGE: [-500, 50000],
-        EXCLUDED_PATH_KEYWORDS: ['civil', 'road'],
+        EXCLUDED_PATH_KEYWORDS: ['civil', 'road', 'overall'],
     };
 
     const state = {
@@ -697,7 +697,7 @@
                         if (shouldExcludeFilePath(relPath)) {
                             results.stats.excluded++;
                             results.stats.processed++;
-                            results.detailedTracking.excludedFiles.push({ folder, file: relPath, reason: 'Path contains civil/road' });
+                            results.detailedTracking.excludedFiles.push({ folder, file: relPath, reason: 'Path contains civil/road/overall' });
                             return;
                         }
 
@@ -939,7 +939,7 @@
             html += `<div class="metadata-row"><span class="metadata-label">Folders Found:</span><span class="metadata-value">${Object.keys(results.folderMap).length}</span></div>`;
             
             if (results.stats.excluded > 0) {
-                html += `<div class="metadata-row"><span class="metadata-label">Excluded (Civil/Road):</span><span class="metadata-value">${results.stats.excluded}</span></div>`;
+                html += `<div class="metadata-row"><span class="metadata-label">Excluded (Civil/Road/Overall):</span><span class="metadata-value">${results.stats.excluded}</span></div>`;
             }
             
             if (results.stats.noGPS > 0) {
