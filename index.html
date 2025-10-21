@@ -346,6 +346,7 @@
         VALID_LAT_RANGE: [-90, 90],
         VALID_LON_RANGE: [-180, 180],
         VALID_ALT_RANGE: [-500, 50000],
+        EXCLUDED_PATH_KEYWORDS: ['civil', 'road'],
     };
 
     const state = {
@@ -364,6 +365,11 @@
         metadataContent: document.getElementById('metadataContent'),
         plotDiv: document.getElementById('main-plot'),
     };
+
+    function shouldExcludeFilePath(filePath) {
+        const pathLower = (filePath || '').toLowerCase();
+        return CONFIG.EXCLUDED_PATH_KEYWORDS.some(keyword => pathLower.includes(keyword));
+    }
 
     DOM.selectBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -646,6 +652,7 @@
                 gpsFound: 0,
                 noGPS: 0,
                 failed: 0,
+                excluded: 0,
             },
             metadata: {
                 cameras: new Set(),
@@ -664,8 +671,17 @@
                 
                 await Promise.allSettled(batch.map(async (file) => {
                     try {
+                        const relPath = file.webkitRelativePath || file.name;
+                        
+                        // Check if file path should be excluded
+                        if (shouldExcludeFilePath(relPath)) {
+                            results.stats.excluded++;
+                            results.stats.processed++;
+                            return;
+                        }
+
                         const buffer = await file.arrayBuffer();
-                        const gpsData = await extractGPS(buffer, file.name);
+                        const gpsData = await extractGPS(buffer, relPath);
                         
                         if (gpsData && isValidGPS(gpsData)) {
                             results.points.push(gpsData);
@@ -703,7 +719,9 @@
             }
 
             if (results.points.length === 0) {
-                const message = results.stats.noGPS > 0 
+                const message = results.stats.excluded > 0
+                    ? `No valid GPS data found. (${results.stats.excluded} file(s) excluded due to folder naming)`
+                    : results.stats.noGPS > 0
                     ? `No GPS data found in any of the ${validFiles.length} image(s).`
                     : 'Could not extract GPS data from files.';
                 showMessage(message, 'error');
@@ -712,8 +730,9 @@
                 renderPlot(results);
                 updateMetadata(results);
                 
+                const excludedMsg = results.stats.excluded > 0 ? ` (${results.stats.excluded} file(s) excluded)` : '';
                 const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
-                showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${failMsg}`, 'success');
+                showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${excludedMsg}${failMsg}`, 'success');
             }
         } catch (error) {
             showMessage('Error during processing: ' + error.message, 'error');
@@ -766,9 +785,7 @@
             const altMargin = Math.max((altMax - altMin) * 0.25, 20);
             const zMax = altMax + altMargin;
 
-            const folders = Object.keys(results.folderMap)
-                .filter(f => !f.toLowerCase().includes('civil') && !f.toLowerCase().includes('road'))
-                .sort();
+            const folders = Object.keys(results.folderMap).sort();
 
             if (folders.length > CONFIG.MAX_FOLDERS_TO_RENDER) {
                 showMessage(`Note: Only showing first ${CONFIG.MAX_FOLDERS_TO_RENDER} folders out of ${folders.length}. Consider splitting your data.`, 'warning');
@@ -894,6 +911,10 @@
             html += `<div class="metadata-row"><span class="metadata-label">Total GPS Points:</span><span class="metadata-value">${results.points.length}</span></div>`;
             html += `<div class="metadata-row"><span class="metadata-label">Images Processed:</span><span class="metadata-value">${results.stats.gpsFound}</span></div>`;
             html += `<div class="metadata-row"><span class="metadata-label">Folders Found:</span><span class="metadata-value">${Object.keys(results.folderMap).length}</span></div>`;
+            
+            if (results.stats.excluded > 0) {
+                html += `<div class="metadata-row"><span class="metadata-label">Excluded (Civil/Road):</span><span class="metadata-value">${results.stats.excluded}</span></div>`;
+            }
             
             if (results.stats.noGPS > 0) {
                 html += `<div class="metadata-row"><span class="metadata-label">No GPS Data:</span><span class="metadata-value">${results.stats.noGPS}</span></div>`;
