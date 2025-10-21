@@ -253,6 +253,72 @@
             font-weight: 600;
         }
         
+        .summary-panel {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 10px;
+            line-height: 1.5;
+            max-height: 500px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .summary-panel.show {
+            display: block;
+        }
+        
+        .summary-panel h3 {
+            color: #32CD32;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .summary-section {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+        
+        .summary-section h4 {
+            color: #ffdc00;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        
+        .summary-folder {
+            margin-bottom: 8px;
+            padding-left: 8px;
+        }
+        
+        .summary-folder-name {
+            color: #0099ff;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+        
+        .summary-file {
+            color: #aaa;
+            padding-left: 12px;
+            font-size: 9px;
+            margin: 2px 0;
+        }
+        
+        .summary-file.plotted {
+            color: #90ee90;
+        }
+        
+        .summary-file.ignored {
+            color: #ff9999;
+        }
+        
+        .summary-file.no-gps {
+            color: #ffff99;
+        }
+        
         .footer {
             font-size: 10px;
             color: #555;
@@ -326,6 +392,11 @@
                 <div id="metadataContent"></div>
             </div>
             
+            <div class="summary-panel" id="summaryPanel">
+                <h3>Detailed Processing Summary</h3>
+                <div id="summaryContent"></div>
+            </div>
+            
             <div class="footer">
                 <p>Data stays on your device</p>
                 <p>No upload to any server</p>
@@ -338,7 +409,7 @@
 <script>
     const CONFIG = {
         MAX_FILES: 10000,
-        VALID_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/tiff', 'image/webp', 'image/bmp'],
+        VALID_IMAGE_TYPES: ['image/jpeg'],
         BATCH_SIZE: 50,
         EXIF_TIMEOUT: 2000,
         IMAGE_LOAD_TIMEOUT: 3000,
@@ -363,6 +434,8 @@
         progressText: document.getElementById('progressText'),
         metadataPanel: document.getElementById('metadataPanel'),
         metadataContent: document.getElementById('metadataContent'),
+        summaryPanel: document.getElementById('summaryPanel'),
+        summaryContent: document.getElementById('summaryContent'),
         plotDiv: document.getElementById('main-plot'),
     };
 
@@ -415,7 +488,7 @@
 
     function isImageFile(file) {
         const isValidType = CONFIG.VALID_IMAGE_TYPES.includes(file.type);
-        const isValidExtension = /\.(jpg|jpeg|png|tiff|tif|webp|bmp)$/i.test(file.name);
+        const isValidExtension = /\.(jpg|jpeg)$/i.test(file.name);
         return isValidType || isValidExtension;
     }
 
@@ -423,7 +496,7 @@
         try {
             const imageFiles = files.filter(f => isImageFile(f));
             if (imageFiles.length === 0) {
-                showMessage('No image files found. Supported: JPG, PNG, TIFF, WebP, BMP', 'error');
+                showMessage('No JPG image files found. Supported: JPG, JPEG', 'error');
                 return;
             }
             processFolderFiles(imageFiles);
@@ -638,7 +711,7 @@
         const validFiles = files.filter(f => isImageFile(f));
         
         if (validFiles.length === 0) {
-            showMessage('No valid image files found', 'error');
+            showMessage('No valid JPG image files found', 'error');
             state.isProcessing = false;
             DOM.selectBtn.disabled = false;
             DOM.progressContainer.classList.remove('show');
@@ -661,6 +734,13 @@
                 alts: [],
             },
             folderMap: {},
+            detailedTracking: {
+                allFolders: {},
+                excludedFiles: [],
+                noGPSFiles: [],
+                failedFiles: [],
+                plottedFiles: [],
+            },
         };
 
         try {
@@ -672,11 +752,17 @@
                 await Promise.allSettled(batch.map(async (file) => {
                     try {
                         const relPath = file.webkitRelativePath || file.name;
+                        const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
                         
-                        // Check if file path should be excluded
+                        if (!results.detailedTracking.allFolders[folder]) {
+                            results.detailedTracking.allFolders[folder] = [];
+                        }
+                        results.detailedTracking.allFolders[folder].push(relPath);
+                        
                         if (shouldExcludeFilePath(relPath)) {
                             results.stats.excluded++;
                             results.stats.processed++;
+                            results.detailedTracking.excludedFiles.push({ folder, file: relPath, reason: 'Path contains civil/road' });
                             return;
                         }
 
@@ -694,18 +780,23 @@
                                 results.metadata.cameras.add(gpsData.camera);
                             }
 
-                            const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
                             if (!results.folderMap[folder]) {
                                 results.folderMap[folder] = [];
                             }
                             results.folderMap[folder].push(gpsData);
+                            results.detailedTracking.plottedFiles.push({ folder, file: relPath });
                         } else if (gpsData) {
                             results.stats.failed++;
+                            results.detailedTracking.failedFiles.push({ folder, file: relPath, reason: 'Invalid GPS data' });
                         } else {
                             results.stats.noGPS++;
+                            results.detailedTracking.noGPSFiles.push({ folder, file: relPath, reason: 'No GPS data found' });
                         }
                     } catch (err) {
+                        const relPath = file.webkitRelativePath || file.name;
+                        const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
                         results.stats.failed++;
+                        results.detailedTracking.failedFiles.push({ folder, file: relPath, reason: err.message || 'Processing error' });
                     }
                     
                     results.stats.processed++;
@@ -734,6 +825,8 @@
                 const failMsg = results.stats.failed > 0 ? ` (${results.stats.failed} files skipped)` : '';
                 showMessage(`Success! Plotted ${results.points.length} points from ${results.stats.gpsFound} image(s)${excludedMsg}${failMsg}`, 'success');
             }
+            
+            updateDetailedSummary(results);
         } catch (error) {
             showMessage('Error during processing: ' + error.message, 'error');
         } finally {
@@ -805,7 +898,7 @@
                 
                 const labels = folderPoints.map(p => {
                     const filename = p.filename.split('/').pop() || p.filename;
-                    return `<b>${folderName}</b><br>` +
+                    return `<b>Folder: ${folderName}</b><br>` +
                            `File: ${filename}<br>` +
                            `Latitude: ${p.latitude.toFixed(6)}°<br>` +
                            `Longitude: ${p.longitude.toFixed(6)}°<br>` +
@@ -816,11 +909,10 @@
                     x: lons,
                     y: lats,
                     z: alts,
-                    mode: 'lines+markers',
+                    mode: 'markers',
                     type: 'scatter3d',
                     name: folderName,
-                    line: { color: folderColor, width: 4 },
-                    marker: { size: 5, color: folderColor, opacity: 0.85 },
+                    marker: { size: 6, color: folderColor, opacity: 0.85 },
                     text: labels,
                     hovertemplate: '%{text}<extra></extra>',
                     legendgroup: folderName,
@@ -962,6 +1054,119 @@
             DOM.metadataContent.innerHTML = html;
             DOM.metadataPanel.classList.add('show');
         } catch (error) {}
+    }
+
+    function updateDetailedSummary(results) {
+        try {
+            let html = '';
+            
+            const allFolders = Object.keys(results.detailedTracking.allFolders).sort();
+            const totalFiles = Object.values(results.detailedTracking.allFolders).reduce((sum, files) => sum + files.length, 0);
+            
+            html += `<div class="summary-section">`;
+            html += `<h4>📊 Overall Statistics</h4>`;
+            html += `<div style="color: #e0e0e0; padding: 4px 0;">Total Folders: ${allFolders.length}</div>`;
+            html += `<div style="color: #e0e0e0; padding: 4px 0;">Total Files: ${totalFiles}</div>`;
+            html += `<div style="color: #90ee90; padding: 4px 0;">✓ Plotted: ${results.detailedTracking.plottedFiles.length}</div>`;
+            html += `<div style="color: #ffff99; padding: 4px 0;">⚠ No GPS: ${results.detailedTracking.noGPSFiles.length}</div>`;
+            html += `<div style="color: #ff9999; padding: 4px 0;">✗ Excluded: ${results.detailedTracking.excludedFiles.length}</div>`;
+            html += `<div style="color: #ff9999; padding: 4px 0;">✗ Failed: ${results.detailedTracking.failedFiles.length}</div>`;
+            html += `</div>`;
+            
+            if (results.detailedTracking.plottedFiles.length > 0) {
+                html += `<div class="summary-section">`;
+                html += `<h4>✓ Successfully Plotted (${results.detailedTracking.plottedFiles.length})</h4>`;
+                const plottedByFolder = {};
+                results.detailedTracking.plottedFiles.forEach(item => {
+                    if (!plottedByFolder[item.folder]) plottedByFolder[item.folder] = [];
+                    plottedByFolder[item.folder].push(item.file);
+                });
+                Object.keys(plottedByFolder).sort().forEach(folder => {
+                    html += `<div class="summary-folder">`;
+                    html += `<div class="summary-folder-name">📁 ${folder} (${plottedByFolder[folder].length})</div>`;
+                    plottedByFolder[folder].sort().forEach(file => {
+                        html += `<div class="summary-file plotted">✓ ${file}</div>`;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            if (results.detailedTracking.excludedFiles.length > 0) {
+                html += `<div class="summary-section">`;
+                html += `<h4>✗ Excluded Files (${results.detailedTracking.excludedFiles.length})</h4>`;
+                const excludedByFolder = {};
+                results.detailedTracking.excludedFiles.forEach(item => {
+                    if (!excludedByFolder[item.folder]) excludedByFolder[item.folder] = [];
+                    excludedByFolder[item.folder].push({ file: item.file, reason: item.reason });
+                });
+                Object.keys(excludedByFolder).sort().forEach(folder => {
+                    html += `<div class="summary-folder">`;
+                    html += `<div class="summary-folder-name">📁 ${folder} (${excludedByFolder[folder].length})</div>`;
+                    excludedByFolder[folder].sort((a, b) => a.file.localeCompare(b.file)).forEach(item => {
+                        html += `<div class="summary-file ignored">✗ ${item.file} - ${item.reason}</div>`;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            if (results.detailedTracking.noGPSFiles.length > 0) {
+                html += `<div class="summary-section">`;
+                html += `<h4>⚠ No GPS Data (${results.detailedTracking.noGPSFiles.length})</h4>`;
+                const noGPSByFolder = {};
+                results.detailedTracking.noGPSFiles.forEach(item => {
+                    if (!noGPSByFolder[item.folder]) noGPSByFolder[item.folder] = [];
+                    noGPSByFolder[item.folder].push({ file: item.file, reason: item.reason });
+                });
+                Object.keys(noGPSByFolder).sort().forEach(folder => {
+                    html += `<div class="summary-folder">`;
+                    html += `<div class="summary-folder-name">📁 ${folder} (${noGPSByFolder[folder].length})</div>`;
+                    noGPSByFolder[folder].sort((a, b) => a.file.localeCompare(b.file)).forEach(item => {
+                        html += `<div class="summary-file no-gps">⚠ ${item.file} - ${item.reason}</div>`;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            if (results.detailedTracking.failedFiles.length > 0) {
+                html += `<div class="summary-section">`;
+                html += `<h4>✗ Failed to Process (${results.detailedTracking.failedFiles.length})</h4>`;
+                const failedByFolder = {};
+                results.detailedTracking.failedFiles.forEach(item => {
+                    if (!failedByFolder[item.folder]) failedByFolder[item.folder] = [];
+                    failedByFolder[item.folder].push({ file: item.file, reason: item.reason });
+                });
+                Object.keys(failedByFolder).sort().forEach(folder => {
+                    html += `<div class="summary-folder">`;
+                    html += `<div class="summary-folder-name">📁 ${folder} (${failedByFolder[folder].length})</div>`;
+                    failedByFolder[folder].sort((a, b) => a.file.localeCompare(b.file)).forEach(item => {
+                        html += `<div class="summary-file ignored">✗ ${item.file} - ${item.reason}</div>`;
+                    });
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            html += `<div class="summary-section">`;
+            html += `<h4>📂 All Folders & Files (${allFolders.length} folders, ${totalFiles} files)</h4>`;
+            allFolders.forEach(folder => {
+                const files = results.detailedTracking.allFolders[folder];
+                html += `<div class="summary-folder">`;
+                html += `<div class="summary-folder-name">📁 ${folder} (${files.length} files)</div>`;
+                files.sort().forEach(file => {
+                    html += `<div class="summary-file">${file}</div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
+
+            DOM.summaryContent.innerHTML = html;
+            DOM.summaryPanel.classList.add('show');
+        } catch (error) {
+            console.error('Error updating detailed summary:', error);
+        }
     }
 
     function updateProgress(current, total) {
