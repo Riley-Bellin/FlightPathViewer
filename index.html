@@ -439,6 +439,22 @@
         plotDiv: document.getElementById('main-plot'),
     };
 
+    function extractFolderName(file) {
+        if (!file.webkitRelativePath) {
+            return 'root';
+        }
+        
+        const pathSegments = file.webkitRelativePath.split('/');
+        
+        if (pathSegments.length >= 3) {
+            return pathSegments[1];
+        } else if (pathSegments.length === 2) {
+            return pathSegments[0];
+        } else {
+            return 'root';
+        }
+    }
+
     function shouldExcludeFilePath(filePath) {
         const pathLower = (filePath || '').toLowerCase();
         return CONFIG.EXCLUDED_PATH_KEYWORDS.some(keyword => pathLower.includes(keyword));
@@ -752,7 +768,7 @@
                 await Promise.allSettled(batch.map(async (file) => {
                     try {
                         const relPath = file.webkitRelativePath || file.name;
-                        const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
+                        const folder = extractFolderName(file);
                         
                         if (!results.detailedTracking.allFolders[folder]) {
                             results.detailedTracking.allFolders[folder] = [];
@@ -794,7 +810,7 @@
                         }
                     } catch (err) {
                         const relPath = file.webkitRelativePath || file.name;
-                        const folder = file.webkitRelativePath ? file.webkitRelativePath.split('/')[0] : 'root';
+                        const folder = extractFolderName(file);
                         results.stats.failed++;
                         results.detailedTracking.failedFiles.push({ folder, file: relPath, reason: err.message || 'Processing error' });
                     }
